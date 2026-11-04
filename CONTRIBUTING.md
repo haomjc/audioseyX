@@ -11,7 +11,7 @@ python -m unittest discover -s tests -v
 python -m sphinx -W --keep-going -b html docs docs/_build/html
 python -m build
 python tools/audit_distribution.py dist
-python -m twine check --strict dist/*
+python -m twine check --strict dist/*.whl dist/*.tar.gz
 ```
 
 Activate the virtual environment using the command appropriate to your shell before installing. The public test suite uses synthetic fixtures and simulated receivers; it does not initiate physical capture or transfer.

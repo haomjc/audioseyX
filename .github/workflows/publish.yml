@@ -31,7 +31,7 @@ jobs:
       - run: python -m unittest discover -s tests -v
       - run: python -m build
       - run: python tools/audit_distribution.py dist
-      - run: python -m twine check --strict dist/*
+      - run: python -m twine check --strict dist/*.whl dist/*.tar.gz
       - uses: actions/upload-artifact@v7.0.2
         with:
           name: release-distributions

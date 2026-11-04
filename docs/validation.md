@@ -31,7 +31,7 @@ audioseyx --self-test --report self-test.json
 python -m sphinx -W --keep-going -b html docs docs/_build/html
 python -m build
 python tools/audit_distribution.py dist
-python -m twine check --strict dist/*
+python -m twine check --strict dist/*.whl dist/*.tar.gz
 ```
 
 Public tests do not need legacy numerical tables. Simulated receiver tests use artificial addresses. No test connects to a physical AVR.
