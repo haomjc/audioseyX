@@ -113,7 +113,7 @@ def project_supported_disk(values, lower, upper, anchor):
     rotated = values * np.conj(phase)
     magnitude = np.abs(rotated)
     clipped = rotated * np.minimum(1, upper / np.maximum(magnitude, 1e-30))
-    selected = clipped.real < lower
+    selected = (lower>0) & (clipped.real < lower)
     clipped[selected] = lower[selected] + 1j*np.clip(rotated.imag[selected],
         -np.sqrt(np.maximum(upper[selected]**2-lower[selected]**2, 0)),
         np.sqrt(np.maximum(upper[selected]**2-lower[selected]**2, 0)))
@@ -121,6 +121,77 @@ def project_supported_disk(values, lower, upper, anchor):
     result[0] = result[0].real
     result[-1] = result[-1].real
     return result
+
+
+class FrequencyBlockInverse:
+    """Exact symbol inverse, exploiting only proven zero main/main blocks."""
+    def __init__(self,spaces,gram,rho,penalty_weights):
+        self.count=len(spaces);bins=spaces[0].nfft//2+1
+        self.mains=[i for i,s in enumerate(spaces) if not s.channel.startswith('SW')]
+        self.subs=[i for i,s in enumerate(spaces) if s.channel.startswith('SW')]
+        diagonal=np.array([np.real(gram.get((i,i),np.zeros(bins)))+np.mean(s.regularization)+rho*penalty_weights[i]
+                           for i,s in enumerate(spaces)])
+        main_set=set(self.mains)
+        arrow=not any(i!=j and i in main_set and j in main_set and np.any(value)
+                      for (i,j),value in gram.items())
+        if not arrow:
+            symbol=np.zeros((bins,self.count,self.count),dtype=complex)
+            for (i,j),value in gram.items():symbol[:,i,j]=value
+            for i in range(self.count):symbol[:,i,i]=diagonal[i]
+            self.inverse=np.linalg.inv(symbol);self.kind='full_complex_frequency_blocks'
+            return
+        self.kind='exact_main_sub_schur_blocks' if self.subs else 'diagonal_frequency_blocks'
+        self.main_inverse=1/diagonal[self.mains]
+        if not self.subs:return
+        subcount=len(self.subs)
+        self.coupling=np.zeros((len(self.mains),subcount,bins),dtype=complex)
+        for m,i in enumerate(self.mains):
+            for s,j in enumerate(self.subs):self.coupling[m,s]=gram.get((i,j),0)
+        schur=np.zeros((bins,subcount,subcount),dtype=complex)
+        for a,i in enumerate(self.subs):
+            for b,j in enumerate(self.subs):schur[:,a,b]=gram.get((i,j),0)
+            schur[:,a,a]=diagonal[i]
+        if self.mains:
+            schur-=np.einsum('msf,mf,mtf->fst',self.coupling.conj(),self.main_inverse,self.coupling,optimize=True)
+        self.schur_inverse=np.linalg.inv(schur)
+
+    def apply(self,values):
+        if self.kind=='full_complex_frequency_blocks':
+            return np.einsum('fij,jf->if',self.inverse,values,optimize=True)
+        result=np.zeros_like(values)
+        if not self.subs:
+            result[self.mains]=self.main_inverse*values[self.mains]
+            return result
+        rhs=values[self.subs].copy()
+        if self.mains:
+            rhs-=np.einsum('msf,mf->sf',self.coupling.conj(),self.main_inverse*values[self.mains],optimize=True)
+        result[self.subs]=np.einsum('fst,tf->sf',self.schur_inverse,rhs,optimize=True)
+        if self.mains:
+            result[self.mains]=self.main_inverse*(values[self.mains]-np.einsum('msf,sf->mf',self.coupling,result[self.subs],optimize=True))
+        return result
+
+
+class AndersonHistory:
+    """Small safeguarded multisecant history; all state coordinates remain."""
+    def __init__(self,depth):
+        self.depth=depth;self.inputs=[];self.outputs=[]
+
+    def clear(self):self.inputs.clear();self.outputs.clear()
+
+    def proposal(self,value,mapped):
+        self.inputs.append(value.copy());self.outputs.append(mapped.copy())
+        if len(self.inputs)>self.depth+1:self.inputs.pop(0);self.outputs.pop(0)
+        if len(self.inputs)<2:return None
+        residual=[b-a for a,b in zip(self.inputs,self.outputs)]
+        df=np.array([residual[i+1]-residual[i] for i in range(len(residual)-1)])
+        dg=np.array([self.outputs[i+1]-self.outputs[i] for i in range(len(residual)-1)])
+        matrix=df@df.T
+        ridge=max(float(np.trace(matrix))*1e-10,1e-20)
+        try:gamma=np.linalg.solve(matrix+np.eye(len(matrix))*ridge,df@residual[-1])
+        except np.linalg.LinAlgError:return None
+        if not np.isfinite(gamma).all() or np.linalg.norm(gamma)>1000:return None
+        candidate=mapped-gamma@dg
+        return candidate if np.isfinite(candidate).all() else None
 
 
 class JointFIRProblem:
@@ -207,6 +278,7 @@ class JointFIRProblem:
         gram = {}
         rhs = [np.zeros(self.nfft // 2 + 1, dtype=complex) for _ in self.spaces]
         for scalar, observation in zip(weights, self.observations):
+            if scalar==0:continue
             w = scalar * observation.frequency_weight
             for output, coefficient in observation.terms:
                 rhs[output] += np.conj(coefficient) * w * observation.target
@@ -220,10 +292,118 @@ class JointFIRProblem:
 
     def normal_apply(self, taps, gram):
         filters = self.common_spectra(taps)
+        return self.normal_from_spectra(filters,gram)
+
+    def normal_from_spectra(self,filters,gram):
         values = [np.zeros(self.nfft // 2 + 1, dtype=complex) for _ in self.spaces]
         for (output, other), coefficient in gram.items():
             values[output] += coefficient * filters[other]
         return np.concatenate([self.spectrum_adjoint(value, i) for i, value in enumerate(values)])
+
+    def position_quadratics(self):
+        positions=sorted({o.position for o in self.observations});result=[]
+        for position in positions:
+            selected=np.array([o.position==position for o in self.observations])
+            mass=float(np.sum(self.base_weights[selected]));weights=self.base_weights*selected/mass
+            gram,rhs=self.normal_statistics(weights)
+            constant=sum(weight*parseval_energy(o.target*np.sqrt(o.frequency_weight),self.nfft)
+                         for weight,o in zip(weights,self.observations) if weight)
+            result.append({'position':position,'mass':mass,'gram':gram,'rhs':rhs,'constant':constant})
+        return result
+
+    def risk_curvature(self,x,statistics,risk_weight,temperature):
+        """Exact data gradient and PSD covariance correction to half-Hessian.
+
+        If l_p=x' A_p x-2 b_p' x+c_p and r_p=A_p x-b_p,
+        H/2=sum(alpha_p A_p)+(2*risk/T)*Cov_soft(r_p).
+        The covariance is explicitly centred, avoiding subtractive PSD loss.
+        """
+        spectra=self.common_spectra(x);residuals=[];losses=[]
+        for row in statistics:
+            applied=self.normal_from_spectra(spectra,row['gram'])
+            residuals.append(applied-row['rhs'])
+            losses.append(max(0.,float(x@applied-2*x@row['rhs']+row['constant'])))
+        losses=np.asarray(losses);residuals=np.asarray(residuals)
+        mass=np.array([row['mass'] for row in statistics])
+        soft=mass*np.exp((losses-np.max(losses))/temperature);soft/=soft.sum()
+        alpha=(1-risk_weight)*mass+risk_weight*soft
+        gram={};rhs=np.zeros(self.size)
+        for weight,row in zip(alpha,statistics):
+            rhs+=weight*row['rhs']
+            for key,value in row['gram'].items():
+                if key not in gram:gram[key]=np.zeros_like(value)
+                gram[key]+=weight*value
+        centred=residuals-soft@residuals
+        low_rank=np.sqrt(2*risk_weight*soft/temperature)[:,None]*centred
+        return {'data_value':float((1-risk_weight)*(mass@losses)+risk_weight*temperature*logsumexp(losses/temperature,b=mass)),
+                'gradient_half':alpha@residuals,'gram':gram,'rhs':rhs,'low_rank':low_rank,
+                'position_losses':dict(zip([row['position'] for row in statistics],losses.tolist()))}
+
+    def _risk_linear_step(self,gram,rhs,rho,metric,low_rank,cg_iterations,cg_tolerance,cancel):
+        blocks=all(space.realization is None and space.nfft==self.nfft for space in self.spaces)
+        inverse=FrequencyBlockInverse(self.spaces,gram,rho,metric) if blocks else None
+        diagonals=[]
+        if not blocks:
+            for i,space in enumerate(self.spaces):
+                diagonal=np.real(gram.get((i,i),np.zeros(self.nfft//2+1)))[:space.nfft//2+1]
+                if space.realization is None:
+                    value=diagonal*space.nfft/self.nfft+np.mean(space.regularization)+rho*metric[i]
+                else:
+                    q=space.regularization+rho*np.mean(metric[i])+np.mean(diagonal)*space.nfft/self.nfft
+                    value=np.asarray(space.realization.power(2).T@q).ravel()+space.parameter_ridge
+                diagonals.append(np.maximum(value,1e-12))
+        def apply(v):
+            return self.normal_apply(v,gram)+self.regularization_apply(v)+rho*self.realization_normal(v,metric)+low_rank.T@(low_rank@v)
+        def precondition(v):
+            if blocks:
+                transformed=np.array([rfft(v[where],space.nfft) for where,space in zip(self.slices,self.spaces)])
+                transformed=inverse.apply(transformed)
+                return np.concatenate([irfft(transformed[i],space.nfft)[:space.length] for i,space in enumerate(self.spaces)])
+            return np.concatenate([irfft(rfft(v[where],space.nfft)/diagonal,space.nfft)[:space.length]
+                                   if space.realization is None else v[where]/diagonal
+                                   for where,space,diagonal in zip(self.slices,self.spaces,diagonals)])
+        count=[0]
+        def callback(_):
+            count[0]+=1
+            if cancel is not None and cancel.is_set():raise InterruptedError('Joint risk solve cancelled')
+        step,info=cg(LinearOperator((self.size,self.size),matvec=apply,dtype=float),rhs,
+                     M=LinearOperator((self.size,self.size),matvec=precondition,dtype=float),
+                     rtol=cg_tolerance,atol=0,maxiter=cg_iterations,callback=callback)
+        if info<0 or not np.isfinite(step).all():raise ValueError('Exact risk Newton-CG failed')
+        return step,info,count[0],inverse.kind if blocks else 'native_parameter_diagonal'
+
+    def risk_x_step(self,x,z,dual,rho,metric,statistics,risk_weight,temperature,cg_iterations,cg_tolerance,
+                    max_steps,tolerance,cancel=None):
+        penalty_rhs=rho*np.concatenate([space.adjoint(irfft(weight*(value-u),space.nfft)[:space.length])
+                                       for space,weight,value,u in zip(self.spaces,metric,z,dual)])
+        total_cg=0;last_info=0;kind='';converged=False
+        for iteration in range(max_steps):
+            if cancel is not None and cancel.is_set():raise InterruptedError('Joint risk solve cancelled')
+            curvature=self.risk_curvature(x,statistics,risk_weight,temperature)
+            gradient=curvature['gradient_half']+self.regularization_apply(x-self.prior)+rho*self.realization_normal(x,metric)-penalty_rhs
+            step,last_info,count,kind=self._risk_linear_step(curvature['gram'],-gradient,rho,metric,curvature['low_rank'],cg_iterations,cg_tolerance,cancel)
+            total_cg+=count
+            if np.linalg.norm(step)<=tolerance*max(1.,np.linalg.norm(x)) and last_info==0:
+                converged=True;break
+            direction=float(2*gradient@step)
+            if direction>=0:break
+            line=self.risk_line(x,step,risk_weight,temperature)
+            base=self.native_spectra(x);change=self.native_spectra(step)
+            quadratic=np.zeros(3)
+            for a,b,u,value,weight,space in zip(base,change,dual,z,metric,self.spaces):
+                residual=a-value+u
+                cross=np.real(np.conj(residual)*b)*weight
+                cross=float((2*np.sum(cross)-cross[0]-cross[-1])/space.nfft)
+                quadratic+=np.array([parseval_energy(np.sqrt(weight)*b,space.nfft),2*cross,
+                                     parseval_energy(np.sqrt(weight)*residual,space.nfft)])
+            def objective(alpha):return line(alpha)+rho*float(quadratic@np.array([alpha*alpha,alpha,1]))
+            initial=objective(0);alpha=1.
+            for _ in range(24):
+                if objective(alpha)<=initial+1e-4*alpha*direction:
+                    x=x+alpha*step;break
+                alpha*=.5
+            else:break
+        return x,converged,total_cg,last_info,kind,iteration+1
 
     def observation_losses(self, taps):
         filters = self.common_spectra(taps)
@@ -383,7 +563,9 @@ class JointFIRProblem:
     def solve(self, *, iterations=60, cg_iterations=100, cg_tolerance=1e-6,
               risk_weight=.35, risk_temperature=.15, regularization_rounds=3,
               rho=.3, bound_tolerance_db=.15, progress=None, cancel=None, initial=None,
-              lower_bound_method="supporting_halfplanes",penalty_metric="uniform"):
+              lower_bound_method="supporting_halfplanes",penalty_metric="uniform",
+              over_relaxation=1.,penalty_adaptation='rms',exact_spatial_risk=True,
+              risk_inner_iterations=6,risk_inner_tolerance=1e-7,anderson_depth=0):
         if not 1 <= iterations <= 500 or not 1 <= cg_iterations <= 1000:
             raise ValueError("Invalid joint solver iteration budget")
         if not 0 <= risk_weight <= 1 or not np.isfinite(risk_temperature) or risk_temperature <= 0:
@@ -392,8 +574,15 @@ class JointFIRProblem:
             raise ValueError("Invalid joint solver tolerance or regularization")
         if lower_bound_method not in ["annulus", "supporting_halfplanes"]:
             raise ValueError("Unknown lower magnitude bound method")
-        if penalty_metric not in ["uniform","data_diagonal"]:
+        if penalty_metric not in ["uniform","data_diagonal","root_data_diagonal"]:
             raise ValueError("Unknown ADMM penalty metric")
+        if not np.isfinite(bound_tolerance_db) or not 0<=bound_tolerance_db<=1:
+            raise ValueError("Gain-bound numerical envelope must be 0-1 dB")
+        if not 0<over_relaxation<2 or penalty_adaptation not in ['rms','relative_max','fixed']:
+            raise ValueError('Invalid ADMM relaxation or penalty-adaptation method')
+        if not isinstance(exact_spatial_risk,bool) or not 1<=risk_inner_iterations<=30 or not 0<risk_inner_tolerance<1:
+            raise ValueError('Invalid spatial-risk inner-solve controls')
+        if not isinstance(anderson_depth,int) or not 0<=anderson_depth<=8:raise ValueError('Anderson history depth must be 0-8')
         x = self.prior.copy() if initial is None else np.asarray(initial,dtype=float).copy()
         if x.shape!=(self.size,) or not np.isfinite(x).all():
             raise ValueError("Initial joint parameters do not match the complete problem")
@@ -414,9 +603,16 @@ class JointFIRProblem:
             candidate_score,_=self.risk(candidate,risk_weight,risk_temperature)
             if candidate_score<best_score:best,best_score=candidate,candidate_score
         phase_anchors = self.native_spectra(best)
+        # The anchor and projection MUST describe the same feasible set.
+        # Previously, accepted anchors could use the declared dB envelope,
+        # while their supporting planes enforced stricter bounds. A finite
+        # FIR with the anchor phase could then have no feasible realization.
+        envelope=10**(bound_tolerance_db/20)
+        projection_bounds={id(space):(space.lower/envelope,space.upper*envelope) for space in self.spaces}
         def project(values, space, anchor):
-            return (project_annulus(values, space.lower, space.upper) if lower_bound_method=="annulus"
-                    else project_supported_disk(values, space.lower, space.upper, anchor))
+            lower,upper=projection_bounds[id(space)]
+            return (project_annulus(values,lower,upper) if lower_bound_method=="annulus"
+                    else project_supported_disk(values,lower,upper,anchor))
         z = [project(value,space,anchor) for value,space,anchor in zip(self.native_spectra(x),self.spaces,phase_anchors)]
         weights = self.risk_weights(x, risk_weight, risk_temperature) if risk_weight else self.base_weights.copy()
         gram, data_rhs = self.normal_statistics(weights)
@@ -427,73 +623,129 @@ class JointFIRProblem:
         penalty_weights=[]
         for i,space in enumerate(self.spaces):
             diagonal=np.real(gram.get((i,i),np.zeros(self.nfft//2+1)))[:space.nfft//2+1]*space.nfft/self.nfft
+            base_metric=np.maximum(diagonal,max(float(np.mean(space.regularization)),float(np.max(diagonal))*1e-6,1e-8))
             penalty_weights.append(np.ones_like(diagonal) if penalty_metric=="uniform" else
-                                   np.maximum(diagonal,max(float(np.mean(space.regularization)),float(np.max(diagonal))*1e-6,1e-8)))
+                                   np.clip(np.sqrt(base_metric),.1,32) if penalty_metric=='root_data_diagonal' else base_metric)
         history = []
+        positions={o.position for o in self.observations}
+        risk_cache=self.position_quadratics() if exact_spatial_risk and risk_weight and len(positions)>1 else None
         total_cg = 0
         converged = False
         statistics_version=0
         cached_block_key=None
         cached_inverse=None
         use_blocks=all(space.realization is None and space.nfft==self.nfft for space in self.spaces)
+        preconditioner_name='native_parameter_diagonal'
+        phase_period=max(1,iterations//regularization_rounds)
+        update_iterations={phase_period*index for index in range(1,regularization_rounds) if phase_period*index<iterations}
+        final_update=max(update_iterations,default=0)
+        update_count=0
+        accelerator=AndersonHistory(anderson_depth) if anderson_depth else None
+        acceleration_key=None;pending_acceleration=None;acceleration_attempts=0;acceleration_rejected=0
+        scales=[]
+        for space,weight in zip(self.spaces,penalty_weights):
+            quadrature=np.full(len(weight),2/space.nfft);quadrature[[0,-1]]=1/space.nfft
+            scales.append(np.sqrt(weight*quadrature))
+        def pack_state(arrays):
+            return np.concatenate([part for value,scale in zip(arrays,scales)
+                                   for part in [(value*scale).real,(value*scale).imag]])
+        def unpack_state(value):
+            result=[];offset=0
+            for scale in scales:
+                count=len(scale);result.append((value[offset:offset+count]+1j*value[offset+count:offset+2*count])/scale)
+                offset+=2*count
+            return result
+        def decompose_state(packed):
+            state=unpack_state(packed)
+            projected=[project(value,space,anchor) for value,space,anchor in zip(state,self.spaces,phase_anchors)]
+            return projected,[value-point for value,point in zip(state,projected)]
         for iteration in range(iterations):
             if cancel is not None and cancel.is_set():
                 raise InterruptedError("Joint FIR optimization cancelled")
-            if risk_weight and iteration and iteration % max(1, iterations // regularization_rounds) == 0:
-                proposed = self.risk_weights(best, risk_weight, risk_temperature)
-                weights = .5 * weights + .5 * proposed
-                gram, data_rhs = self.normal_statistics(weights)
-                statistics_version+=1
+            if iteration in update_iterations:
+                update_count+=1
+                if risk_weight and risk_cache is None:
+                    proposed = self.risk_weights(best, risk_weight, risk_temperature)
+                    weights = .5 * weights + .5 * proposed
+                    gram, data_rhs = self.normal_statistics(weights)
+                    statistics_version+=1
                 if lower_bound_method=="supporting_halfplanes":
                     phase_anchors=self.native_spectra(best)
                     # Warm-start the new convex subproblem, including its
                     # scaled multipliers; feasibility is checked on real taps.
-            rhs = data_rhs + self.regularization_apply(self.prior)
-            rhs += rho * np.concatenate([space.adjoint(irfft(weight*(value-u),space.nfft)[:space.length])
-                                         for value,u,space,weight in zip(z,dual,self.spaces,penalty_weights)])
-            operator = LinearOperator((self.size, self.size), dtype=float,
-                                      matvec=lambda v: self.normal_apply(v, gram) + self.regularization_apply(v) + rho * self.realization_normal(v,penalty_weights))
-            denominators = []
-            for i, (space, where) in enumerate(zip(self.spaces, self.slices)):
-                diagonal = np.real(gram.get((i, i), np.zeros(self.nfft // 2 + 1)))[:space.nfft // 2 + 1]
-                if space.realization is None:
-                    denominator = diagonal * space.nfft / self.nfft + np.mean(space.regularization) + rho*penalty_weights[i]
-                else:
-                    q = space.regularization + rho*np.mean(penalty_weights[i]) + np.mean(diagonal) * space.nfft / self.nfft
-                    denominator = np.asarray(space.realization.power(2).T @ q).ravel() + space.parameter_ridge
-                denominators.append(np.maximum(denominator, 1e-10))
-            def precondition(value):
-                if use_blocks:
-                    transformed=np.asarray([rfft(value[where],space.nfft) for where,space in zip(self.slices,self.spaces)])
-                    transformed=np.einsum("fij,jf->if",cached_inverse,transformed,optimize=True)
-                    return np.concatenate([irfft(transformed[i],space.nfft)[:space.length] for i,space in enumerate(self.spaces)])
-                return np.concatenate([irfft(rfft(value[where], space.nfft) / denominator, space.nfft)[:space.length]
-                                       if space.realization is None else value[where] / denominator
-                                       for where, space, denominator in zip(self.slices, self.spaces, denominators)])
-            if use_blocks and cached_block_key!=(statistics_version,rho):
-                symbol=np.zeros((self.nfft//2+1,len(self.spaces),len(self.spaces)),dtype=complex)
-                for (i,j),value in gram.items():symbol[:,i,j]=value
-                for i,space in enumerate(self.spaces):symbol[:,i,i]+=np.mean(space.regularization)+rho*penalty_weights[i]
-                cached_inverse=np.linalg.inv(symbol)
-                cached_block_key=(statistics_version,rho)
-            preconditioner = LinearOperator((self.size, self.size), dtype=float, matvec=precondition)
-            inner = [0]
-            def callback(_):
-                if cancel is not None and cancel.is_set():
-                    raise InterruptedError("Joint FIR optimization cancelled")
-                inner[0] += 1
-            x, info = cg(operator, rhs, x0=x, M=preconditioner, rtol=cg_tolerance,
-                         atol=0, maxiter=cg_iterations, callback=callback)
+            if accelerator is not None:
+                key=(update_count,rho)
+                if key!=acceleration_key:
+                    accelerator.clear();pending_acceleration=None;acceleration_key=key
+                    z,dual=decompose_state(pack_state([point+u for point,u in zip(z,dual)]))
+                # Accelerate the Douglas-Rachford state w=z+u. Extrapolating z
+                # and u independently breaks z=projection(w), introducing
+                # redundant state directions unrelated to the fixed point.
+                state_before=pack_state([point+u for point,u in zip(z,dual)])
+            risk_inner_converged=True
+            risk_inner_steps=0
+            if risk_cache is not None:
+                x,risk_inner_converged,count,info,preconditioner_name,risk_inner_steps=self.risk_x_step(
+                    x,z,dual,rho,penalty_weights,risk_cache,risk_weight,risk_temperature,
+                    cg_iterations,cg_tolerance,risk_inner_iterations,risk_inner_tolerance,cancel)
+                inner=[count]
+            else:
+                rhs = data_rhs + self.regularization_apply(self.prior)
+                rhs += rho * np.concatenate([space.adjoint(irfft(weight*(value-u),space.nfft)[:space.length])
+                                             for value,u,space,weight in zip(z,dual,self.spaces,penalty_weights)])
+                operator = LinearOperator((self.size, self.size), dtype=float,
+                                          matvec=lambda v: self.normal_apply(v, gram) + self.regularization_apply(v) + rho * self.realization_normal(v,penalty_weights))
+                denominators = []
+                for i, (space, where) in enumerate(zip(self.spaces, self.slices)):
+                    diagonal = np.real(gram.get((i, i), np.zeros(self.nfft // 2 + 1)))[:space.nfft // 2 + 1]
+                    if space.realization is None:
+                        denominator = diagonal * space.nfft / self.nfft + np.mean(space.regularization) + rho*penalty_weights[i]
+                    else:
+                        q = space.regularization + rho*np.mean(penalty_weights[i]) + np.mean(diagonal) * space.nfft / self.nfft
+                        denominator = np.asarray(space.realization.power(2).T @ q).ravel() + space.parameter_ridge
+                    denominators.append(np.maximum(denominator, 1e-10))
+                def precondition(value):
+                    if use_blocks:
+                        transformed=np.asarray([rfft(value[where],space.nfft) for where,space in zip(self.slices,self.spaces)])
+                        transformed=cached_inverse.apply(transformed)
+                        return np.concatenate([irfft(transformed[i],space.nfft)[:space.length] for i,space in enumerate(self.spaces)])
+                    return np.concatenate([irfft(rfft(value[where], space.nfft) / denominator, space.nfft)[:space.length]
+                                           if space.realization is None else value[where] / denominator
+                                           for where, space, denominator in zip(self.slices, self.spaces, denominators)])
+                if use_blocks and cached_block_key!=(statistics_version,rho):
+                    cached_inverse=FrequencyBlockInverse(self.spaces,gram,rho,penalty_weights)
+                    cached_block_key=(statistics_version,rho)
+                preconditioner = LinearOperator((self.size, self.size), dtype=float, matvec=precondition)
+                inner = [0]
+                def callback(_):
+                    if cancel is not None and cancel.is_set():
+                        raise InterruptedError("Joint FIR optimization cancelled")
+                    inner[0] += 1
+                # Solve the remaining correction, not the large absolute RHS.
+                # Otherwise CG can accept x unchanged once its residual falls
+                # below rtol*||rhs||, even while ADMM still needs small updates.
+                residual=rhs-operator.matvec(x)
+                correction,info=cg(operator,residual,M=preconditioner,rtol=cg_tolerance,
+                                    atol=0,maxiter=cg_iterations,callback=callback)
+                x=x+correction
+                if use_blocks:preconditioner_name=cached_inverse.kind
             total_cg += inner[0]
             if info < 0 or not np.isfinite(x).all():
                 raise ValueError("Joint FIR normal-equation solve failed")
             actual = self.native_spectra(x)
             previous = z
+            relaxed=[over_relaxation*value+(1-over_relaxation)*old for value,old in zip(actual,previous)]
             z = [project(value+u,space,anchor)
-                 for value,u,space,anchor in zip(actual,dual,self.spaces,phase_anchors)]
-            dual = [u + value - projected for u, value, projected in zip(dual, actual, z)]
+                 for value,u,space,anchor in zip(relaxed,dual,self.spaces,phase_anchors)]
+            dual = [u + value - projected for u, value, projected in zip(dual, relaxed, z)]
             primal = np.sqrt(sum(parseval_energy(np.sqrt(weight)*(value-projected),space.nfft) for value,projected,space,weight in zip(actual,z,self.spaces,penalty_weights)))
             dual_residual = rho*np.sqrt(sum(parseval_energy(np.sqrt(weight)*(a-b),space.nfft) for a,b,space,weight in zip(z,previous,self.spaces,penalty_weights)))
+            relative_primal=0.;relative_dual=0.
+            for value,projected,old,space,weight in zip(actual,z,previous,self.spaces,penalty_weights):
+                lower,upper=projection_bounds[id(space)]
+                scale=np.maximum(lower,upper*.05)
+                relative_primal=max(relative_primal,float(np.max(np.sqrt(weight)*np.abs(value-projected)/scale)))
+                relative_dual=max(relative_dual,float(rho*np.max(np.sqrt(weight)*np.abs(projected-old)/scale)))
             violation = self.bound_violation_db(x)
             score, position_losses = self.risk(x, risk_weight, risk_temperature)
             if violation <= bound_tolerance_db and score < best_score:
@@ -510,18 +762,34 @@ class JointFIRProblem:
             history.append({"iteration": iteration + 1, "risk_objective": score,
                             "position_losses": position_losses, "bound_violation_db": violation,
                             "primal_residual": float(primal), "dual_residual": float(dual_residual),
-                            "cg_iterations": inner[0], "cg_converged": info == 0, "rho": rho})
+                            'maximum_relative_primal':relative_primal,'maximum_relative_dual':relative_dual,
+                            "cg_iterations": inner[0], "cg_converged": info == 0, "rho": rho,
+                            "risk_inner_converged":risk_inner_converged,"risk_inner_steps":risk_inner_steps})
             if progress:
                 progress(round(10 + 75 * (iteration + 1) / iterations),
                          f"Joint FIR iteration {iteration + 1}/{iterations}; bound gap {violation:.3f} dB")
-            final_risk_round = (regularization_rounds - 1) * max(1, iterations // regularization_rounds) if risk_weight else 0
-            if iteration >= max(9, final_risk_round + 5) and violation<=bound_tolerance_db and primal < 1e-5 * np.sqrt(len(self.spaces)) and dual_residual < 1e-5 * np.sqrt(len(self.spaces)) and info == 0:
+            if iteration >= max(9,final_update+5) and violation<=bound_tolerance_db+1e-7 and primal < 1e-5 * np.sqrt(len(self.spaces)) and dual_residual < 1e-5 * np.sqrt(len(self.spaces)) and info == 0 and risk_inner_converged:
                 converged = True
                 break
-            if primal > 10 * max(dual_residual, 1e-14) and rho < 10:
+            rejected=False
+            if accelerator is not None:
+                mapped=pack_state([point+u for point,u in zip(z,dual)]);fixed_residual=float(np.linalg.norm(mapped-state_before))
+                if pending_acceleration is not None and fixed_residual>1.2*pending_acceleration['residual']:
+                    z,dual=decompose_state(pending_acceleration['fallback'])
+                    x=pending_acceleration['x'].copy()
+                    accelerator.clear();pending_acceleration=None;acceleration_rejected+=1;rejected=True
+                else:
+                    pending_acceleration=None
+                    proposal=accelerator.proposal(state_before,mapped)
+                    if proposal is not None:
+                        pending_acceleration={'fallback':mapped,'x':x.copy(),'residual':fixed_residual}
+                        z,dual=decompose_state(proposal);acceleration_attempts+=1
+            balance_primal,balance_dual=(relative_primal,relative_dual) if penalty_adaptation=='relative_max' else (primal,dual_residual)
+            adapt_now=not rejected and (penalty_adaptation=='rms' or (penalty_adaptation=='relative_max' and (iteration+1)%5==0 and iteration<iterations*.8))
+            if adapt_now and balance_primal > 10 * max(balance_dual, 1e-14) and rho < 100:
                 rho *= 2
                 dual = [value / 2 for value in dual]
-            elif dual_residual > 10 * max(primal, 1e-14) and rho > 1e-3:
+            elif adapt_now and balance_dual > 10 * max(balance_primal, 1e-14) and rho > 1e-3:
                 rho /= 2
                 dual = [value * 2 for value in dual]
         identity_score, _ = self.risk(self.identity, risk_weight, risk_temperature)
@@ -531,8 +799,12 @@ class JointFIRProblem:
                       "expanded_fir_taps": sum(space.length for space in self.spaces),
                       "output_filters": len(self.spaces), "observations": len(self.observations),
                       "common_fft_size": self.nfft, "iterations": len(history), "cg_iterations": total_cg,
-                      "preconditioner":"full_complex_frequency_blocks" if use_blocks else "native_parameter_diagonal",
+                      "preconditioner":preconditioner_name,
                       "numerically_converged": converged, "actual_bound_violation_db": self.bound_violation_db(best),
+                      "numerical_convergence_scope":"final_phase_exact_spatial_risk" if risk_cache is not None else "final_frozen_phase_risk_subproblem",
+                      "spatial_risk_solver":"exact_logsumexp_newton_cg" if risk_cache is not None else "quadratic_or_frozen_weight_cg",
+                      "risk_inner_converged":risk_inner_converged,
+                      "projection_matches_returned_feasible_set":True,"surrogate_updates":update_count,
                       "risk_objective": best_score, "identity_risk_objective": identity_score,
                       "regularization_prior_risk_objective": prior_score,
                       "improved_over_identity": bool(best_score < identity_score - 1e-9),
@@ -542,6 +814,8 @@ class JointFIRProblem:
                       "risk_weight": risk_weight, "risk_temperature": risk_temperature, "history": history,
                       "lower_bound_method":lower_bound_method,
                       "admm_penalty_metric":penalty_metric,
+                      'over_relaxation':over_relaxation,'penalty_adaptation':penalty_adaptation,
+                      'anderson_depth':anderson_depth,'acceleration_attempts':acceleration_attempts,'acceleration_rejected':acceleration_rejected,
                       "full_tap_feasible_block_refinement":True,
                       "returned_bound_diagnostics":self.bound_diagnostics(best),
                       "last_iterate_bound_diagnostics":self.bound_diagnostics(x),

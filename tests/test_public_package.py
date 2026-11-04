@@ -16,6 +16,17 @@ from audioseyx.model import Measurement, Project
 
 
 class PublicPackageTests(unittest.TestCase):
+    def test_expanded_joint_reference_is_not_packed_as_if_it_were_a_native_design(self):
+        project=Project('reference',[Measurement('FL','p0','m',ir=[0,1,0])],'synthetic')
+        design=design_project(project,'XT32',{})
+        design['joint_optimization']={'design_space':'expanded_causal_fir_reference','native_realization_notice':'Reference only'}
+        with tempfile.TemporaryDirectory() as directory,patch('audioseyx.exporter.compile_channel',side_effect=AssertionError('Do not pack an unverified expanded joint reference')):
+            bundle=export_bundle(project,design,Path(directory)/'reference')
+            with zipfile.ZipFile(bundle) as archive:
+                candidate=json.loads(archive.read('native-candidate.json'))
+                self.assertFalse(candidate['encoding_available'])
+                self.assertNotIn('coefficients',candidate['channels'][0])
+                self.assertIn('FL-filter.wav',archive.namelist())
     def test_missing_private_tables_do_not_block_wav_design_export(self):
         impulse = np.zeros(2048)
         impulse[20] = 1

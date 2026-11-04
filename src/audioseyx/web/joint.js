@@ -11,8 +11,8 @@ function jointSettings(){
   crossovers:$('joint-use-receiver-crossovers').checked?receiverJointDefaults.crossovers:{},
   large_channels:$('joint-large-channels').value,crossover_candidates_hz:$('joint-crossover-candidates').value,joint_phase_target:$('joint-phase-target').value,
   joint_delay_ms:Number($('joint-delay').value),position_risk:Number($('joint-risk').value),
-  joint_iterations:Number($('joint-iterations').value),joint_memory_mib:Number($('joint-memory').value),
-  fdw_cycles:Number($('fdw-cycles').value),fdw_start_hz:Number($('fdw-start').value),
+  joint_iterations:Number($('joint-iterations').value),joint_bound_tolerance_db:Number($('joint-bound-tolerance').value),joint_memory_mib:Number($('joint-memory').value),
+  fdw_cycles:Number($('fdw-cycles').value),fdw_reference:$('joint-fdw-reference').value,fdw_start_hz:Number($('fdw-start').value),
   validation_positions:$('joint-validation').value.split(',').map(p=>p.trim()).filter(Boolean),
   native_synthesis_path:$('joint-synthesis-path').value.trim()||null};
 }
@@ -52,5 +52,5 @@ $('joint-read-receiver').onclick=()=>action(async()=>{
  $('joint-large-channels').value=values.large_channels.join(', ');
  $('joint-lfe-lowpass').value=values.lfe_lowpass_hz;
  $('joint-receiver-values').textContent=Object.entries(values.crossovers).map(([channel,hz])=>channel+' '+hz+' Hz').join(' · ');
- toast('Loaded the current receiver menu settings into this offline design. Receiver settings were not changed.');
+ toast(values.receiver_settings_reference.source==='offline_saved_snapshot_not_refreshed'?'Loaded the saved receiver settings without contacting the receiver.':'Loaded the receiver menu snapshot into this offline design. Receiver settings were not changed.');
 });

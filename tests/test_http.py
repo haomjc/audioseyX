@@ -3,6 +3,7 @@ import re
 import tempfile
 import threading
 import time
+import os
 from unittest.mock import patch
 import unittest
 from pathlib import Path
@@ -71,6 +72,27 @@ class HttpWorkflowTests(unittest.TestCase):
         self.assertEqual(project["layout"]["signature"],"2.2.2")
         self.assertEqual(project["measurement_count"],6)
         self.assertEqual(project["origin"],"synthetic")
+
+    def test_polarity_api_requires_model_groups_and_invalidates_with_a_new_project(self):
+        self.bench.set_project(Project('polarity',[Measurement(c,'p0',c,ir=[0,0,1,-.2,0,0]) for c in ['FL','FR']],'synthetic'))
+        with self.assertRaises(HTTPError):self.request('/api/polarity',{'groups':[['FL','FR']]},self.bench.token)
+        with self.request('/api/polarity',{'groups':[['FL','FR']],'same_models_confirmed':True},self.bench.token) as response:
+            report=json.load(response)
+        self.assertFalse(report['terminal_wiring_verified'])
+        with self.request('/download-polarity') as response:self.assertEqual(json.load(response)['schema'],'audioseyx-polarity-1')
+        self.bench.set_project(Project('new project',[Measurement('C','p0','c',ir=[1,0,0])]))
+        with self.assertRaises(HTTPError):self.request('/download-polarity')
+
+    def test_saved_routing_and_row_plans_work_without_connecting_to_the_receiver(self):
+        project=Project('offline row',[Measurement('FL','p0','a',ir=[0,1,0]),Measurement('SW1','p0','b',ir=[0,1,0])],
+                        metadata={'receiver_settings_snapshot':{'available':True,'crossovers':{'FL':60},'large_channels':[],'bass_mode':'lfe','lfe_lowpass_hz':150}})
+        self.bench.set_project(project);self.bench.receiver=None
+        with patch('audioseyx.receiver.socket.create_connection',side_effect=AssertionError('Offline settings must not contact an AVR')):
+            with self.request('/api/design/receiver-settings',{},self.bench.token) as response:settings=json.load(response)
+            self.assertEqual(settings['crossovers'],{'FL':60})
+            self.assertEqual(settings['receiver_settings_reference']['source'],'offline_saved_snapshot_not_refreshed')
+            with self.request('/api/listening-area',{'preset':'three_seat_row','centre_priority':.5},self.bench.token) as response:summary=json.load(response)
+            self.assertEqual(summary['listening_area_coverage']['missing_training_seats'],['left','right'])
 
     def wait_design(self):
         deadline=time.monotonic()+10
@@ -182,7 +204,9 @@ class HttpWorkflowTests(unittest.TestCase):
             with self.request("/api/download-info?path=/download") as response:
                 info = json.load(response)
             self.assertEqual(info["sha256"], hashlib.sha256(b"first").hexdigest())
-            target.write_bytes(b"second")
+            before=target.stat()
+            target.write_bytes(b"other")
+            os.utime(target,ns=(before.st_atime_ns,before.st_mtime_ns))
             request = Request(self.address + "/download", headers={"If-Match": '"' + info["sha256"] + '"', "Range": "bytes=0-1"})
             with self.assertRaises(HTTPError) as caught:
                 self.opener.open(request, timeout=10)

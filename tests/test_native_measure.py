@@ -29,7 +29,8 @@ class MeasurementReceiver:
         command, payload = parse_frame(packet)
         self.commands.append((command, payload))
         if command == "START_CHNL":
-            report = {"SpConnect": "N" if self.silent else "S", "Distance": 250, "ResponseCoef": 2}
+            sub=json.loads(payload).get('Channel','').startswith('SW')
+            report = {"SpConnect": "N" if self.silent else 'E' if sub else "S", "Distance": 250, "ResponseCoef": 2}
             self.reply.extend(frame(command, json.dumps(report).encode()))
         elif command == "GET_RESPON":
             ir = np.zeros(16384, dtype="<f4")
@@ -55,6 +56,20 @@ def status(dtype="Float32"):
 
 
 class NativeMicTests(unittest.TestCase):
+    def test_subwoofer_command_falling_back_to_a_main_speaker_is_rejected(self):
+        class WrongRole(MeasurementReceiver):
+            def sendall(self,packet):
+                command,payload=parse_frame(packet)
+                if command=='START_CHNL':
+                    self.commands.append((command,payload))
+                    self.reply.extend(frame(command,b'{"Comm":"ACK","SpConnect":"S","Distance":250}'))
+                else:super().sendall(packet)
+        receiver=WrongRole()
+        with patch('audioseyx.native_measure.socket.create_connection',return_value=receiver):
+            with self.assertRaisesRegex(ValueError,'confirm a subwoofer'):
+                capture_position(status(),channels=['SW1'],settle_seconds=0)
+        self.assertNotIn('GET_RESPON',[command for command,_ in receiver.commands])
+        self.assertEqual(receiver.commands[-1][0],'EXIT_AUDMD')
     def test_native_capture_preserves_raw_scale_and_position(self):
         receiver = MeasurementReceiver()
         with patch("audioseyx.native_measure.socket.create_connection", return_value=receiver):

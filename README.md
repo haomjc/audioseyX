@@ -4,15 +4,17 @@
 
 audioseyX brings measurement files, REW integration, room analysis and Audyssey-aware filter design into one local interface. It preserves individual microphone positions and original response timing, evaluates the actual truncated filters, and keeps numerical predictions separate from hardware and acoustic verification.
 
-**Status: 0.5.0a1, an experimental public preview.** PyPI publishing and the Read the Docs site are being configured; a local build does not establish that either service is live. Read-only information and speaker settings have been checked on an X3700H; acoustic capture, native reconstruction and transfer remain unverified. This project is independent of Audyssey, Denon, Marantz and Dirac.
+**Status: 0.5.0a2, an experimental public preview.** PyPI publishing and the Read the Docs site are being configured; a local build does not establish that either service is live. Read-only information, speaker settings and Float capture transport have been checked on an X3700H. Microphone compensation, normal-playback reconstruction and transfer remain unverified. This project is independent of Audyssey, Denon, Marantz and Dirac.
 
 ## What works offline
 
 - Import ADY, MQX, MDAT frequency data, mono impulse-response WAV and `.awb` projects.
 - Preserve measurement positions, repeats, sample rates and original timing.
+- Apply explicit seat priorities, keep repeated scans from multiplying spatial importance, and reserve measured positions for independent validation.
 - Work with variable channel counts, zero to four subwoofer outputs and custom height layouts; report missing output/position coverage. Examples range from 2.0 to 9.4.6 without certifying a receiver's capacity.
 - Read compatible receiver speaker settings and load reviewed per-channel crossovers, bass mode and LFE low-pass into the offline model. Select physical capture outputs explicitly.
 - Inspect frequency response, group delay, impulse, ETC, Schroeder decay and a low-frequency STFT spectrogram.
+- Compare confirmed same-model speakers for repeatable relative polarity, retaining inconclusive results and native receiver hints without automatically reversing a speaker.
 - Report EDT/T20/T30 only when the current quality checks pass; do not invent time-domain measurements from magnitude-only files.
 - Design minimum-phase filters within separate MultEQ, XT and XT32 budgets, with constrained boost and measured-band coverage.
 - Jointly optimize complex main/subwoofer and LFE responses across positions and repeats, using every selected FIR parameter. Distinguish expanded references from actual native coefficients supplied through a synthesis model.
@@ -55,7 +57,9 @@ audioseyx --joint-benchmark --report joint-benchmark.json
 
 ## Receiver integration
 
-Experimental stock-microphone capture targets the observed Float receiver protocol. The microphone connects to the receiver; the computer reads the responses over the LAN. The driver has not yet been validated on an X3700H or other physical receiver. Fixed-device capture is pending; imported files remain usable.
+Experimental stock-microphone capture targets the observed Float receiver protocol. The microphone connects to the receiver; the computer reads the responses over the LAN. The checked X3700H capture path remains experimental; Fixed-device capture is pending and imported files remain usable.
+
+X3700H Float capture transport, including individual subwoofer commands, has now been checked. **Version 0.5.0a1 used configured SWMIX names as measurement commands; affected subwoofer records must be treated as unverified.** Version 0.5.0a2 separates status and measurement identifiers and checks the returned speaker role. Original data can be retained for audit, with the affected subwoofer recordings excluded or reacquired.
 
 **The public source and packages exclude legacy native coefficient tables and channel-address data whose redistribution permission has not been established.** General filter design and WAV export work without them. Native encoding is explicitly marked unavailable, and receiver transfer is not prepared from guessed data. See [native integration](docs/native-integration.md) for optional local-data configuration and current limitations.
 

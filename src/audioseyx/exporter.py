@@ -23,6 +23,8 @@ def export_bundle(project, design, directory, joint=None):
               "encoding_available": True, "channels": []}
     for item in design["channels"]:
         try:
+            if design.get('joint_optimization',{}).get('design_space')=='expanded_causal_fir_reference':
+                raise CompatibilityDataUnavailable('Expanded joint FIR references are not native coefficient designs. Supply a native synthesis model; hardware validation remains required.')
             compiled = compile_channel(item, design["tier"])
         except CompatibilityDataUnavailable as error:
             native["encoding_available"] = False

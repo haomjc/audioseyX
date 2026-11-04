@@ -53,6 +53,8 @@ class Workbench:
         self.events = []
         self.export_path = None
         self.analysis_path = None
+        self.polarity_report = None
+        self.polarity_path = None
         self.rew = RewClient()
         self.template = None
         self.transfer_plan = None
@@ -97,6 +99,7 @@ class Workbench:
                 "receiver": self.receiver, "events": self.events[-15:],
                 "export_available": self.export_path is not None,
                 "analysis_available": self.analysis_path is not None,
+                "polarity":self.polarity_report,
                 "target_curve": {"name": self.target_curve["name"], "points": len(self.target_curve["frequency"])} if self.target_curve else None}
 
     def transfer_state(self):
@@ -118,6 +121,8 @@ class Workbench:
         self.joint = None
         self.export_path = None
         self.analysis_path = None
+        self.polarity_report = None
+        self.polarity_path = None
         self.transfer_plan = None
         self.log(f"Imported {project.name}：{len(project.channels)} channels, {len(project.measurements)} measurements.")
         return project.summary()
@@ -228,6 +233,8 @@ class Workbench:
         from .native_measure import select_capture_outputs
         selected_outputs=select_capture_outputs(self.receiver["status"],body.get("channels"))
         selected_channels=[ALIASES.get(name,name) for name in selected_outputs]
+        position_note=str(body.get('position_note','')).strip()
+        if len(position_note)>200:raise ValueError('Keep the microphone position note within 200 characters')
         if not 1 <= position <= 20 or not 1 <= repeats <= 5:
             raise ValueError('Position must be 1-20 and repeats must be 1-5')
         with self.lock:
@@ -235,6 +242,8 @@ class Workbench:
                 raise ValueError('Wait for or stop the current job first')
             host = self.receiver["host"]
             existing = self.project if self.project and self.project.origin == "native_avr" and self.project.metadata.get("receiver_host") == host and not body.get("new_project") else None
+            if (len(existing.measurements) if existing else 0)+len(selected_channels)*repeats>1024:
+                raise ValueError('This capture would exceed the 1024-response project limit. Save the current project and start another before playing test tones.')
             self.capture_cancel = threading.Event()
             self.job = {"status": "running", "kind": "native_measure", "progress": 0, "message": 'Checking receiver and stock microphone'}
         def progress(number, message):
@@ -248,6 +257,7 @@ class Workbench:
                 if not fresh.get("connected"):
                     raise ValueError('Could not refresh the receiver status')
                 def checkpoint(measurement):
+                    if position_note:measurement.metadata['position_note']=position_note
                     rows.append(measurement)
                     snapshot = Project('Stock microphone capture checkpoint', rows.copy(), "native_avr",
                                        metadata={"receiver_host": host, "partial": True})
@@ -263,6 +273,7 @@ class Workbench:
                                               ['The receiver sampled these responses and transferred them over the LAN. Original responses are retained without peak alignment.',
                                                'Model-specific microphone calibration and timing still need hardware validation. Mixed phase is not enabled automatically.'])
                 project.measurements.extend(rows)
+                if position_note:project.metadata.setdefault('position_notes',{})[f'p{position-1}']=position_note
                 project.metadata["partial"] = failure is not None
                 with self.lock:
                     self.job = {"status": "failed" if failure else "complete", "kind": "native_measure", "progress": 0 if failure else 100,
@@ -378,6 +389,18 @@ class Workbench:
         self.analysis_path.write_text(json.dumps(result, ensure_ascii=False, allow_nan=False), encoding="utf-8")
         return result
 
+    def analyze_polarity(self,body):
+        from .polarity import analyze_polarity
+        if not self.project:raise ValueError("Import or capture original responses first")
+        if self.job['status']=='running':raise ValueError("Wait for the current operation before checking polarity")
+        if body.get('same_models_confirmed') is not True:raise ValueError("Confirm that each comparison group uses the same speaker model")
+        project=self.project
+        report=analyze_polarity(project,body.get('groups',[]))
+        self.polarity_report=report
+        self.polarity_path=self.home/'exports'/(project.id+'-polarity-'+secrets.token_hex(4)+'.json')
+        self.polarity_path.write_text(json.dumps(report,allow_nan=False,indent=2),encoding='utf-8')
+        return report
+
 
 def run_server(home, port=0, open_browser=True):
     from .http_server import build_server
@@ -396,6 +419,7 @@ def main():
     checks=parser.add_mutually_exclusive_group()
     checks.add_argument("--self-test", action="store_true")
     checks.add_argument("--joint-benchmark",action="store_true",help="Run the full synthetic XT32 7.1.4 joint-FIR benchmark without connecting to a receiver")
+    checks.add_argument('--listening-area-benchmark',action='store_true',help='Validate a synthetic three-seat objective without contacting a receiver')
     parser.add_argument("--benchmark-iterations",type=int,default=60)
     parser.add_argument("--report", default=None)
     args = parser.parse_args()
@@ -404,8 +428,11 @@ def main():
     if args.compat_status:
         print(json.dumps(compatibility_status(), ensure_ascii=False, indent=2), flush=True)
         return
-    if args.self_test or args.joint_benchmark:
-        if args.joint_benchmark:
+    if args.self_test or args.joint_benchmark or args.listening_area_benchmark:
+        if args.listening_area_benchmark:
+            from .area_benchmarks import run_listening_area_benchmark
+            report=run_listening_area_benchmark(args.benchmark_iterations,lambda number,message:print(f'{number}% {message}',file=sys.stderr,flush=True))
+        elif args.joint_benchmark:
             from .joint_benchmarks import run_joint_benchmarks
             report=run_joint_benchmarks(args.benchmark_iterations,lambda number,message:print(f"{number}% {message}",file=sys.stderr,flush=True))
         else:

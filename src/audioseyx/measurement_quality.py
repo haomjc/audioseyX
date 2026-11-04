@@ -7,7 +7,7 @@ import numpy as np
 from .dsp import spectrum
 
 
-def frequency_dependent_response(measurement, frequencies, cycles=6.0, window_floor=1e-10):
+def frequency_dependent_response(measurement, frequencies, cycles=6.0, window_floor=1e-10, reference_sample=None):
     """Evaluate a peak-centred Gaussian time window separately at every bin.
 
     ``cycles / f`` is the window's amplitude FWHM. Contributions below the
@@ -24,7 +24,9 @@ def frequency_dependent_response(measurement, frequencies, cycles=6.0, window_fl
         raise ValueError("Invalid frequency-dependent window settings")
     raw = measurement.ir
     rate = measurement.sample_rate
-    peak = int(np.argmax(np.abs(raw)))
+    peak = int(np.argmax(np.abs(raw))) if reference_sample is None else reference_sample
+    if isinstance(peak,bool) or not isinstance(peak,(int,np.integer)) or not 0<=peak<len(raw):
+        raise ValueError("Invalid frequency-dependent window reference sample")
     sigma_factor = cycles / np.sqrt(8 * np.log(2))
     radius_factor = np.sqrt(-2 * np.log(window_floor))
     response = np.empty(len(f), dtype=complex)
@@ -40,6 +42,7 @@ def frequency_dependent_response(measurement, frequencies, cycles=6.0, window_fl
                       "frequency_bins_evaluated": len(f), "window_amplitude_floor": window_floor,
                       "absolute_truncation_error_bound": float(window_floor * np.sum(np.abs(raw))),
                       "original_start_time_s": measurement.start_time_s, "peak_sample_reference": peak,
+                      "reference_source":"largest_peak" if reference_sample is None else "explicit_analysis_reference",
                       "raw_ir_modified": False}
 
 

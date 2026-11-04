@@ -13,6 +13,14 @@ ALIASES.update({f"SWMIX{i}":f"SW{i}" for i in range(1,5)})
 ALIASES.update({"SBC":"SB","CB":"SB"})
 
 
+def unsafe_capture_indices(project):
+    if project.origin!='native_avr':return []
+    aliases={f'SWMIX{i}':f'SW{i}' for i in range(1,5)}
+    return [index for index,m in enumerate(project.measurements)
+            if m.metadata.get('receiver_raw_channel_id') in aliases
+            and m.metadata.get('receiver_measurement_command_id')!=aliases[m.metadata['receiver_raw_channel_id']]]
+
+
 def channel_and_position(name: str, fallback: str = "p0") -> tuple[str, str]:
     text = str(name).upper().strip()
     for channel in sorted(CHANNELS, key=len, reverse=True):
@@ -96,10 +104,21 @@ class Project:
 
     def summary(self):
         from .layouts import summarize_layout
+        unsafe=unsafe_capture_indices(self)
+        area=self.metadata.get('listening_area');coverage=None
+        if area:
+            from .listening_area import resolve_listening_area
+            try:coverage=resolve_listening_area(self,area)
+            except ValueError as error:coverage={'required_seats_measured':False,'error':str(error)}
         return {"id": self.id, "name": self.name, "origin": self.origin, "model": self.model,
                 "tier": self.tier, "channels": self.channels,
                 "positions": sorted({m.position for m in self.measurements}),
                 "measurement_count": len(self.measurements),
                 "ir_count": sum(m.ir is not None for m in self.measurements),
                 "layout":summarize_layout(self.channels,self.measurements),
-                "warnings": self.warnings, "measurements": [m.summary() for m in self.measurements]}
+                "same_model_groups":self.metadata.get("same_model_groups",[]),
+                "position_notes":self.metadata.get('position_notes',{}),
+                "listening_area_plan":area,"listening_area_coverage":coverage,
+                "unsafe_capture_indices":unsafe,
+                "warnings": self.warnings+(['Unverified SWMIX sweep addressing is present. Preserve these records but exclude or remeasure them before filter design.'] if unsafe else []),
+                "measurements": [m.summary() for m in self.measurements]}

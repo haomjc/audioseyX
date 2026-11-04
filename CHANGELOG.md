@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.0a2 — capture correctness and spatial optimization
+
+- Add hierarchical seat priorities, position-balanced native magnitude statistics, explicit missing-seat guards and independent holdout evaluation without refitting or renormalization.
+- Use exact smooth worst-position risk gradient/Hessian steps, exact Schur frequency preconditioning, consistent projection/feasibility bounds and residual-correction CG. Keep feasible output, numerical convergence and native hardware validity separate.
+- Add offline saved-routing snapshots and a reproducible synthetic three-seat benchmark.
+- Recheck download byte hashes even when a file retains its size and timestamp.
+- Translate configured SWMIX aliases to individual SW measurement commands, while retaining both identifiers in provenance. Reject a main-speaker response returned for a configured subwoofer.
+- Flag legacy native SWMIX recordings as unverified and prevent their use in filter design. Preserve original recordings; exclude or reacquire the affected subwoofer data.
+- Add same-model relative-polarity diagnostics with repeated measurements, early-response reference sensitivity, three window lengths and small timing-reference fits. Native reverse hints and terminal wiring verification are separate findings.
+- Add explicit/early-lobe FDW references to avoid centring a correction goal on a stronger late reflection.
+- Export expanded joint references as WAV/report candidates rather than pretending that legacy compression establishes native mixed-phase realizability.
+- Check Float capture transport on an X3700H, including individual subwoofer acquisition. Microphone compensation, normal-playback reconstruction and transfer remain unverified.
+
 ## 0.5.0a1 — full complex joint design preview
 
 - Add variable layout summaries, completeness checks, examples from mono/stereo through 9.4.6, adjustable subwoofer counts and custom channel lists.

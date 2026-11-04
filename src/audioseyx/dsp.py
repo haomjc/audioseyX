@@ -67,7 +67,25 @@ def design_channel(measurements, tier, channel, settings):
     frequencies = np.fft.rfftfreq(nfft, 1 / fs)
     responses = np.asarray([spectrum(m, frequencies) for m in measurements])
     db = 20 * np.log10(np.maximum(np.abs(responses), 1e-12))
-    robust = np.median(db, axis=0)
+    statistics_mode=settings.get('spatial_statistics','legacy_measurement_median')
+    measurement_weights=np.full(len(measurements),1/len(measurements))
+    if statistics_mode=='position_balanced':
+        from .listening_area import weighted_median
+        positions=sorted({m.position for m in measurements})
+        weights=np.array([float(settings.get('position_weights',{}).get(p,1)) for p in positions])
+        if not np.isfinite(weights).all() or np.any(weights<=0):raise ValueError('Spatial weights must be finite and positive')
+        weights/=weights.sum()
+        position_curves=np.array([np.median(db[[i for i,m in enumerate(measurements) if m.position==p]],axis=0) for p in positions])
+        centre=weighted_median(position_curves,weights)
+        spread=1.4826*weighted_median(np.abs(position_curves-centre),weights)
+        robust=centre
+        for position,weight in zip(positions,weights):
+            indices=[i for i,m in enumerate(measurements) if m.position==position]
+            measurement_weights[indices]=weight/len(indices)
+    elif statistics_mode=='legacy_measurement_median':
+        robust = np.median(db, axis=0)
+        spread=1.4826*np.median(np.abs(db-robust),axis=0)
+    else:raise ValueError('Unknown spatial statistics mode')
     robust = smooth_log(robust, frequencies, float(settings.get("smoothing_octave", 1 / 6)))
     covered_low = max(0 if m.ir is not None else float(m.frequency[0]) for m in measurements)
     covered_high = min(m.sample_rate / 2 if m.ir is not None else min(m.sample_rate / 2, float(m.frequency[-1])) for m in measurements)
@@ -95,7 +113,6 @@ def design_channel(measurements, tier, channel, settings):
     if covered_low > 0:
         supported *= np.clip(np.log2(np.maximum(frequencies, 1e-12) / covered_low) / .25, 0, 1)
     weights *= supported
-    spread = 1.4826 * np.median(np.abs(db - np.median(db, axis=0)), axis=0)
     boost_trust = np.clip(1 - spread / 12, 0, 1)
     # A repeatable deep null is still a poor boost target. This conservative
     # gain gate also avoids trying to extend a driver far below its roll-off.
@@ -145,9 +162,9 @@ def design_channel(measurements, tier, channel, settings):
     target_error_before = db[:, evaluation] - target[evaluation]
     target_error_after = target_error_before + 20 * np.log10(np.maximum(np.abs(actual[evaluation]), 1e-12))
     grid = np.geomspace(max(10, covered_low), min(20000, fs * .45, covered_high), 360)
-    averaged_db = np.mean(db, axis=0)
-    metrics = {"rms_before_db": float(np.sqrt(np.mean(target_error_before ** 2))),
-               "rms_after_db": float(np.sqrt(np.mean(target_error_after ** 2))),
+    averaged_db = measurement_weights@db
+    metrics = {"rms_before_db": float(np.sqrt(np.mean(measurement_weights@(target_error_before ** 2)))),
+               "rms_after_db": float(np.sqrt(np.mean(measurement_weights@(target_error_after ** 2)))),
                "truncated_energy_fraction": lost_energy,
                "effective_delay_ms": delay_samples * 1000 / fs,
                "filter_peak": float(np.max(np.abs(taps))), "coefficient_l1_gain_bound": float(np.sum(np.abs(taps))),
@@ -157,6 +174,7 @@ def design_channel(measurements, tier, channel, settings):
     metrics["effective_correction_band_hz"] = [low, high]
     metrics["common_measurement_band_hz"] = [covered_low, covered_high]
     metrics["reference_level_db"] = reference
+    metrics['spatial_statistics']=statistics_mode
     if np.any((depth_trust < .5) & (wanted > 0) & (weights > .5)):
         limitations.append('Boost is reduced in deep nulls or substantial roll-off. This conservative gain protection does not identify the physical cause of the dip.')
     return {"channel": channel, "sample_rate": fs, "design_length": length, "packed_length": packed,
@@ -166,7 +184,54 @@ def design_channel(measurements, tier, channel, settings):
                       "target": np.interp(grid, frequencies, robust * (1 - weights) + target * weights).tolist()}}
 
 
+def evaluate_channel_filter(measurements,item,settings):
+    if not measurements:return {'channel':item['channel'],'available':False,'reason':'No validation response for this output'}
+    fs=item['sample_rate'];nfft=next_fast_len(max(65536,len(item['taps'])*4))
+    f=np.fft.rfftfreq(nfft,1/fs)
+    band=item['metrics']['effective_correction_band_hz']
+    low=max(band[0],max(float(m.frequency[0]) if m.ir is None else 0 for m in measurements))
+    high=min(band[1],min(float(m.frequency[-1]) if m.ir is None else m.sample_rate/2 for m in measurements))
+    selected=(f>=low)&(f<=high)
+    if not selected.any():return {'channel':item['channel'],'available':False,'reason':'No common validation-band coverage'}
+    frequencies=f[selected]
+    response=np.array([20*np.log10(np.maximum(abs(spectrum(m,frequencies)),1e-15)) for m in measurements])
+    reference=item['metrics']['reference_level_db']
+    target=reference+(target_offset(settings['target_curve'],frequencies) if settings.get('target_curve') else
+                      float(settings.get('bass_db',3))/(1+(frequencies/100)**4)+float(settings.get('tilt_db_oct',-.5))*np.log2(np.maximum(frequencies,1000)/1000))
+    gain=20*np.log10(np.maximum(abs(rfft(item['taps'],nfft)[selected]),1e-15))
+    positions=sorted({m.position for m in measurements});weights=np.zeros(len(measurements))
+    for position in positions:
+        indices=[i for i,m in enumerate(measurements) if m.position==position]
+        weights[indices]=1/(len(positions)*len(indices))
+    return {'channel':item['channel'],'available':True,'measurements':len(measurements),'positions':positions,
+            'rms_before_db':float(np.sqrt(np.mean(weights@((response-target)**2)))),
+            'rms_after_db':float(np.sqrt(np.mean(weights@((response+gain-target)**2)))),
+            'reference_level_from_training_db':reference,'used_for_design':False,'renormalized_after_design':False}
+
+
 def design_project(project, tier, settings, progress=None, *, cancel=None):
+    from .model import unsafe_capture_indices
+    if unsafe_capture_indices(project):
+        raise ValueError("Some subwoofer records used unverified SWMIX sweep addressing. Preserve them, then exclude or remeasure before filter design.")
+    settings=dict(settings)
+    validation=settings.get('validation_positions',[])
+    if isinstance(validation,str):validation=[p.strip() for p in validation.split(',') if p.strip()]
+    all_positions={m.position for m in project.measurements}
+    if not isinstance(validation,list) or set(validation)-all_positions or (all_positions and set(validation)==all_positions):
+        raise ValueError('Validation positions must be known and leave at least one training position')
+    settings['validation_positions']=validation
+    area=settings.get('listening_area',project.metadata.get('listening_area'))
+    if area:
+        from .listening_area import resolve_listening_area
+        validation=settings.get('validation_positions',[])
+        if isinstance(validation,str):validation=[p.strip() for p in validation.split(',') if p.strip()]
+        resolved=resolve_listening_area(project,area,validation)
+        if resolved['missing_training_seats'] and not settings.get('allow_partial_listening_area',False):
+            raise ValueError('Row correction is missing measured seats: '+', '.join(resolved['missing_training_seats'])+'. Existing points can only produce an explicitly provisional design.')
+        if settings.get('position_weights'):raise ValueError('Choose listening-area priorities or direct position weights, not both')
+        settings.update(listening_area=area,listening_area_resolution=resolved,position_weights=resolved['position_weights'],spatial_statistics='position_balanced')
+    elif settings.get('position_weights') and 'spatial_statistics' not in settings:
+        settings['spatial_statistics']='position_balanced'
     numeric = ["low_hz", "high_hz", "sub_high_hz", "phase_high_hz", "delay_ms", "max_boost_db", "max_cut_db", "bass_db", "tilt_db_oct", "crossover_hz", "smoothing_octave"]
     for key in numeric:
         if key in settings and not np.isfinite(float(settings[key])):
@@ -190,14 +255,20 @@ def design_project(project, tier, settings, progress=None, *, cancel=None):
     for index, channel in enumerate(project.channels):
         if cancel is not None and cancel.is_set():
             raise InterruptedError("Filter design cancelled")
-        group = [m for m in project.measurements if m.channel == channel]
+        group = [m for m in project.measurements if m.channel == channel and m.position not in validation]
+        if not group:raise ValueError('No training response for output '+channel)
         output.append(design_channel(group, tier, channel, settings))
         if progress:
             progress(round((index + 1) / len(project.channels) * 85), f"Designed {channel}（{index + 1}/{len(project.channels)}）")
-    return {"tier": capability(tier).tier, "project_id": project.id, "origin": project.origin,
+    result={"tier": capability(tier).tier, "project_id": project.id, "origin": project.origin,
             "settings": settings, "channels": output, "hardware_verified": False,
             "receiver_upload_ready": False,
             "notice": 'Curves are offline predictions. Native candidate encoding and actual hardware responses still need validation.'}
+    result.update(training_positions=sorted(all_positions-set(validation)),validation_positions=validation)
+    if validation:
+        result['independent_validation']={'positions':validation,'used_for_design':False,
+            'channels':[evaluate_channel_filter([m for m in project.measurements if m.channel==item['channel'] and m.position in validation],item,settings) for item in output]}
+    return result
 
 
 def joint_sub_alignment(project, designs, crossover=80.0):

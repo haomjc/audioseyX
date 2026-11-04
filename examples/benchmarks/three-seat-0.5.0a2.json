@@ -1,0 +1,2174 @@
+{
+  "version": "0.5.0a2",
+  "origin": "synthetic",
+  "hardware_tested": false,
+  "all_passed": true,
+  "checks": [
+    {
+      "name": "Three distinct measured training seats",
+      "passed": true
+    },
+    {
+      "name": "Central/left/right priorities",
+      "passed": true
+    },
+    {
+      "name": "Every XT32 reference tap retained",
+      "passed": true
+    },
+    {
+      "name": "Actual returned-filter gain feasibility",
+      "passed": true
+    },
+    {
+      "name": "Independent spatial holdout excluded from fitting",
+      "passed": true
+    },
+    {
+      "name": "Exact smooth worst-position risk is used",
+      "passed": true
+    },
+    {
+      "name": "Finite training and holdout errors",
+      "passed": true
+    }
+  ],
+  "settings": {
+    "optimizer": "native_joint",
+    "timing_confirmed": true,
+    "relative_levels_confirmed": true,
+    "routing_measurements_confirmed": true,
+    "listening_area": {
+      "name": "Three-seat row / centre priority",
+      "seats": [
+        {
+          "id": "centre",
+          "weight": 0.5,
+          "positions": {
+            "p0": 2.0,
+            "p3": 1.0,
+            "p4": 1.0
+          }
+        },
+        {
+          "id": "left",
+          "weight": 0.25,
+          "positions": {
+            "p1": 2.0,
+            "p5": 1.0
+          }
+        },
+        {
+          "id": "right",
+          "weight": 0.25,
+          "positions": {
+            "p2": 2.0,
+            "p6": 1.0
+          }
+        }
+      ],
+      "position_notes": {
+        "p0": "Centre seat ear position",
+        "p1": "Left seat ear position",
+        "p2": "Right seat ear position",
+        "p3": "Near centre seat, forward",
+        "p4": "Near centre seat, backward",
+        "p5": "Near left seat, forward",
+        "p6": "Near right seat, forward"
+      }
+    },
+    "validation_positions": [
+      "p3"
+    ],
+    "high_hz": 500,
+    "bass_db": 3,
+    "tilt_db_oct": -0.5,
+    "joint_delay_ms": 5,
+    "fdw_cycles": 6,
+    "joint_penalty_metric": "root_data_diagonal",
+    "joint_cg_iterations": 150,
+    "joint_iterations": 48,
+    "position_risk": 0.35
+  },
+  "listening_area": {
+    "name": "Three-seat row / centre priority",
+    "position_weights": {
+      "p0": 0.5,
+      "p1": 0.25,
+      "p2": 0.25
+    },
+    "position_to_seat": {
+      "p0": "centre",
+      "p1": "left",
+      "p2": "right"
+    },
+    "seats": [
+      {
+        "seat": "centre",
+        "requested_priority": 0.5,
+        "training_positions": [
+          "p0"
+        ],
+        "planned_positions_not_measured": [
+          "p4"
+        ]
+      },
+      {
+        "seat": "left",
+        "requested_priority": 0.25,
+        "training_positions": [
+          "p1"
+        ],
+        "planned_positions_not_measured": [
+          "p5"
+        ]
+      },
+      {
+        "seat": "right",
+        "requested_priority": 0.25,
+        "training_positions": [
+          "p2"
+        ],
+        "planned_positions_not_measured": [
+          "p6"
+        ]
+      }
+    ],
+    "missing_training_seats": [],
+    "required_seats_measured": true,
+    "provisional_normalization": false,
+    "unmeasured_positions_are_not_synthesized": true,
+    "notice": "Seat priorities are divided among measured points within each seat; repeated scans do not multiply seat priority. Missing seats remain unmeasured and prevent final row-wide correction."
+  },
+  "joint_optimization": {
+    "algorithm": "full_space_native_routing_admm_cg",
+    "optimization_variables": 195586,
+    "expanded_fir_taps": 195586,
+    "output_filters": 12,
+    "observations": 36,
+    "common_fft_size": 32768,
+    "iterations": 48,
+    "cg_iterations": 3823,
+    "preconditioner": "exact_main_sub_schur_blocks",
+    "numerically_converged": false,
+    "actual_bound_violation_db": 0.14999999999993274,
+    "numerical_convergence_scope": "final_phase_exact_spatial_risk",
+    "spatial_risk_solver": "exact_logsumexp_newton_cg",
+    "risk_inner_converged": true,
+    "projection_matches_returned_feasible_set": true,
+    "surrogate_updates": 2,
+    "risk_objective": 0.11332061767556477,
+    "identity_risk_objective": 1.3166117911822173,
+    "regularization_prior_risk_objective": 1.3166117911822173,
+    "improved_over_identity": true,
+    "gain_constraints_satisfied": true,
+    "gain_bound_tolerance_db": 0.15,
+    "gain_constraint_domain": "every_native_fft_bin; continuous_frequency_certification_not_claimed",
+    "risk_weight": 0.35,
+    "risk_temperature": 0.15,
+    "history": [
+      {
+        "iteration": 1,
+        "risk_objective": 0.06427593393935677,
+        "position_losses": {
+          "p0": 0.06152365003033157,
+          "p1": 0.06340622232081439,
+          "p2": 0.07010981382142648
+        },
+        "bound_violation_db": 7.126846993299214,
+        "primal_residual": 0.035055900043518454,
+        "dual_residual": 0.2982330333080705,
+        "maximum_relative_primal": 4.184080397756677,
+        "maximum_relative_dual": 34.59046675240898,
+        "cg_iterations": 89,
+        "cg_converged": true,
+        "rho": 3.0,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 3
+      },
+      {
+        "iteration": 2,
+        "risk_objective": 0.053363991244201395,
+        "position_losses": {
+          "p0": 0.05068919746802253,
+          "p1": 0.052174101727206844,
+          "p2": 0.05925369896560088
+        },
+        "bound_violation_db": 6.816017946750611,
+        "primal_residual": 0.03386429964254539,
+        "dual_residual": 0.10031386848612844,
+        "maximum_relative_primal": 4.5847448485220195,
+        "maximum_relative_dual": 7.829283809355239,
+        "cg_iterations": 98,
+        "cg_converged": true,
+        "rho": 3.0,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 3
+      },
+      {
+        "iteration": 3,
+        "risk_objective": 0.05471220340419557,
+        "position_losses": {
+          "p0": 0.05180174880062867,
+          "p1": 0.05341677228342558,
+          "p2": 0.06107453310644167
+        },
+        "bound_violation_db": 6.4184126357701015,
+        "primal_residual": 0.02459370673353424,
+        "dual_residual": 0.07216316668671735,
+        "maximum_relative_primal": 4.38457757797964,
+        "maximum_relative_dual": 3.108448424897105,
+        "cg_iterations": 97,
+        "cg_converged": true,
+        "rho": 3.0,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 3
+      },
+      {
+        "iteration": 4,
+        "risk_objective": 0.056178780142222814,
+        "position_losses": {
+          "p0": 0.05301636388066769,
+          "p1": 0.05483218832628742,
+          "p2": 0.06297995933258196
+        },
+        "bound_violation_db": 6.038687395219111,
+        "primal_residual": 0.019557244300059673,
+        "dual_residual": 0.05703802288533366,
+        "maximum_relative_primal": 4.105016170753291,
+        "maximum_relative_dual": 2.4573711854955413,
+        "cg_iterations": 95,
+        "cg_converged": true,
+        "rho": 3.0,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 3
+      },
+      {
+        "iteration": 5,
+        "risk_objective": 0.05718216395108029,
+        "position_losses": {
+          "p0": 0.05378739547052367,
+          "p1": 0.05579781934960545,
+          "p2": 0.06436575964671813
+        },
+        "bound_violation_db": 5.66161318091082,
+        "primal_residual": 0.01693425500866073,
+        "dual_residual": 0.045160282315530695,
+        "maximum_relative_primal": 3.8700178598464827,
+        "maximum_relative_dual": 1.9029259270192487,
+        "cg_iterations": 96,
+        "cg_converged": true,
+        "rho": 3.0,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 3
+      },
+      {
+        "iteration": 6,
+        "risk_objective": 0.05792058582775763,
+        "position_losses": {
+          "p0": 0.05432605378301734,
+          "p1": 0.056499439915003405,
+          "p2": 0.06542486267411377
+        },
+        "bound_violation_db": 5.281234240567263,
+        "primal_residual": 0.015340449191679666,
+        "dual_residual": 0.035794525125627974,
+        "maximum_relative_primal": 3.7075864975939012,
+        "maximum_relative_dual": 1.6176576967509406,
+        "cg_iterations": 96,
+        "cg_converged": true,
+        "rho": 3.0,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 3
+      },
+      {
+        "iteration": 7,
+        "risk_objective": 0.058478057036748736,
+        "position_losses": {
+          "p0": 0.054713847411572286,
+          "p1": 0.05702251108057744,
+          "p2": 0.06625523981967103
+        },
+        "bound_violation_db": 5.575352122708992,
+        "primal_residual": 0.014089020059432274,
+        "dual_residual": 0.02904123705062795,
+        "maximum_relative_primal": 3.5443106076940003,
+        "maximum_relative_dual": 1.304400663435949,
+        "cg_iterations": 61,
+        "cg_converged": true,
+        "rho": 3.0,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 8,
+        "risk_objective": 0.05901924202367892,
+        "position_losses": {
+          "p0": 0.05510237839900191,
+          "p1": 0.0575400556619568,
+          "p2": 0.0670462208670985
+        },
+        "bound_violation_db": 4.573689392620198,
+        "primal_residual": 0.012989284460882353,
+        "dual_residual": 0.024333195814064224,
+        "maximum_relative_primal": 3.3838409350261944,
+        "maximum_relative_dual": 1.4576333256738554,
+        "cg_iterations": 61,
+        "cg_converged": true,
+        "rho": 3.0,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 9,
+        "risk_objective": 0.05956795326359393,
+        "position_losses": {
+          "p0": 0.055512472126276066,
+          "p1": 0.05807924548650155,
+          "p2": 0.0678208125170862
+        },
+        "bound_violation_db": 4.266456058521953,
+        "primal_residual": 0.011951308421816574,
+        "dual_residual": 0.020999763729871168,
+        "maximum_relative_primal": 3.2284441143548186,
+        "maximum_relative_dual": 1.1989913218117993,
+        "cg_iterations": 63,
+        "cg_converged": true,
+        "rho": 3.0,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 10,
+        "risk_objective": 0.06014372748525694,
+        "position_losses": {
+          "p0": 0.055958412489675424,
+          "p1": 0.058654564759838476,
+          "p2": 0.06860149621015213
+        },
+        "bound_violation_db": 3.987287437775545,
+        "primal_residual": 0.011094239859897433,
+        "dual_residual": 0.0184082834342816,
+        "maximum_relative_primal": 3.08102330799466,
+        "maximum_relative_dual": 1.0326347638241824,
+        "cg_iterations": 63,
+        "cg_converged": true,
+        "rho": 3.0,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 11,
+        "risk_objective": 0.06072892034291394,
+        "position_losses": {
+          "p0": 0.056422242057684605,
+          "p1": 0.059244220604523,
+          "p2": 0.06937623448892659
+        },
+        "bound_violation_db": 3.7433949770917967,
+        "primal_residual": 0.010370976646347715,
+        "dual_residual": 0.016284223400959377,
+        "maximum_relative_primal": 2.942253708284759,
+        "maximum_relative_dual": 1.0127879060866853,
+        "cg_iterations": 61,
+        "cg_converged": true,
+        "rho": 3.0,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 12,
+        "risk_objective": 0.061317766360475305,
+        "position_losses": {
+          "p0": 0.056897533723098255,
+          "p1": 0.05984185948934599,
+          "p2": 0.07014360833874926
+        },
+        "bound_violation_db": 3.5348396306681944,
+        "primal_residual": 0.009717983989684126,
+        "dual_residual": 0.014615638663220173,
+        "maximum_relative_primal": 2.811888588674593,
+        "maximum_relative_dual": 0.9915163092844199,
+        "cg_iterations": 61,
+        "cg_converged": true,
+        "rho": 3.0,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 13,
+        "risk_objective": 0.06189904877381107,
+        "position_losses": {
+          "p0": 0.05737260111357165,
+          "p1": 0.06043529680257079,
+          "p2": 0.07089446332217333
+        },
+        "bound_violation_db": 3.3508496037556013,
+        "primal_residual": 0.009105635927383454,
+        "dual_residual": 0.013333614937824045,
+        "maximum_relative_primal": 2.687329657845534,
+        "maximum_relative_dual": 0.9698368736759693,
+        "cg_iterations": 61,
+        "cg_converged": true,
+        "rho": 3.0,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 14,
+        "risk_objective": 0.062459924807365515,
+        "position_losses": {
+          "p0": 0.057832599197567995,
+          "p1": 0.061010269337344034,
+          "p2": 0.07161753819549857
+        },
+        "bound_violation_db": 3.187373326276401,
+        "primal_residual": 0.008566848854368314,
+        "dual_residual": 0.012163864812936565,
+        "maximum_relative_primal": 2.57258535030375,
+        "maximum_relative_dual": 0.8239415540976718,
+        "cg_iterations": 62,
+        "cg_converged": true,
+        "rho": 3.0,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 15,
+        "risk_objective": 0.06299144813465302,
+        "position_losses": {
+          "p0": 0.05826889152696085,
+          "p1": 0.061557405524974185,
+          "p2": 0.07230290788295328
+        },
+        "bound_violation_db": 3.041164646114727,
+        "primal_residual": 0.008093735954661901,
+        "dual_residual": 0.011010646150227104,
+        "maximum_relative_primal": 2.4709070272699454,
+        "maximum_relative_dual": 0.6382637118945963,
+        "cg_iterations": 61,
+        "cg_converged": true,
+        "rho": 3.0,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 16,
+        "risk_objective": 0.06348774324713612,
+        "position_losses": {
+          "p0": 0.05867537146303675,
+          "p1": 0.06206995471367992,
+          "p2": 0.07294436215914951
+        },
+        "bound_violation_db": 2.902850081455587,
+        "primal_residual": 0.007667131424664046,
+        "dual_residual": 0.009855383407987977,
+        "maximum_relative_primal": 2.382042496433987,
+        "maximum_relative_dual": 0.6477557489378641,
+        "cg_iterations": 61,
+        "cg_converged": true,
+        "rho": 3.0,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 17,
+        "risk_objective": 0.06394995852503291,
+        "position_losses": {
+          "p0": 0.05905214024662244,
+          "p1": 0.0625485134670895,
+          "p2": 0.07354429750961992
+        },
+        "bound_violation_db": 2.77121295879995,
+        "primal_residual": 0.0490100044249914,
+        "dual_residual": 0.15081414172295893,
+        "maximum_relative_primal": 14.12262170715854,
+        "maximum_relative_dual": 43.57907495347876,
+        "cg_iterations": 61,
+        "cg_converged": true,
+        "rho": 3.0,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 18,
+        "risk_objective": 0.061199093151607466,
+        "position_losses": {
+          "p0": 0.05639777927908035,
+          "p1": 0.05968413930483114,
+          "p2": 0.07050520467402016
+        },
+        "bound_violation_db": 22.367197286294115,
+        "primal_residual": 0.011545567574402489,
+        "dual_residual": 0.13031451671128197,
+        "maximum_relative_primal": 2.179329400282668,
+        "maximum_relative_dual": 38.12138851376746,
+        "cg_iterations": 94,
+        "cg_converged": true,
+        "rho": 3.0,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 3
+      },
+      {
+        "iteration": 19,
+        "risk_objective": 0.06195866530436374,
+        "position_losses": {
+          "p0": 0.05712446778122027,
+          "p1": 0.06040476858180835,
+          "p2": 0.07128474174906914
+        },
+        "bound_violation_db": 4.71369013892792,
+        "primal_residual": 0.008196052981346772,
+        "dual_residual": 0.014664157840006058,
+        "maximum_relative_primal": 1.8628087575067662,
+        "maximum_relative_dual": 1.0701725996105373,
+        "cg_iterations": 121,
+        "cg_converged": true,
+        "rho": 1.5,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 3
+      },
+      {
+        "iteration": 20,
+        "risk_objective": 0.06207940286829315,
+        "position_losses": {
+          "p0": 0.05720050096882899,
+          "p1": 0.060501789914795406,
+          "p2": 0.071434974792253
+        },
+        "bound_violation_db": 6.329687444025075,
+        "primal_residual": 0.008222798581883347,
+        "dual_residual": 0.00943451944892798,
+        "maximum_relative_primal": 1.7892845069617063,
+        "maximum_relative_dual": 1.1815907970667763,
+        "cg_iterations": 78,
+        "cg_converged": true,
+        "rho": 1.5,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 21,
+        "risk_objective": 0.06218329091552133,
+        "position_losses": {
+          "p0": 0.05727559426321731,
+          "p1": 0.0606017482330764,
+          "p2": 0.07157360453003957
+        },
+        "bound_violation_db": 5.325357063598069,
+        "primal_residual": 0.0074390506636553685,
+        "dual_residual": 0.0061142443674718164,
+        "maximum_relative_primal": 1.7583382330353865,
+        "maximum_relative_dual": 0.5523069884485986,
+        "cg_iterations": 80,
+        "cg_converged": true,
+        "rho": 1.5,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 22,
+        "risk_objective": 0.062297583210747846,
+        "position_losses": {
+          "p0": 0.05737304057827767,
+          "p1": 0.060717683383751386,
+          "p2": 0.07171576203681254
+        },
+        "bound_violation_db": 5.150976569097857,
+        "primal_residual": 0.006922222095629895,
+        "dual_residual": 0.0043680382272939505,
+        "maximum_relative_primal": 1.7418311021384885,
+        "maximum_relative_dual": 0.27476916082318503,
+        "cg_iterations": 80,
+        "cg_converged": true,
+        "rho": 1.5,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 23,
+        "risk_objective": 0.06240877350870552,
+        "position_losses": {
+          "p0": 0.05747313641542956,
+          "p1": 0.06083489719734256,
+          "p2": 0.07185406956787568
+        },
+        "bound_violation_db": 4.290692212374779,
+        "primal_residual": 0.0062441363835825745,
+        "dual_residual": 0.003746524533465494,
+        "maximum_relative_primal": 1.7238522781940306,
+        "maximum_relative_dual": 0.26700736842510087,
+        "cg_iterations": 80,
+        "cg_converged": true,
+        "rho": 1.5,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 24,
+        "risk_objective": 0.06252350831811646,
+        "position_losses": {
+          "p0": 0.05757830089470226,
+          "p1": 0.060955000764005396,
+          "p2": 0.07199124109987068
+        },
+        "bound_violation_db": 3.290898137186594,
+        "primal_residual": 0.00586738243923071,
+        "dual_residual": 0.0032624435662030058,
+        "maximum_relative_primal": 1.7005768054018953,
+        "maximum_relative_dual": 0.21394961735046153,
+        "cg_iterations": 78,
+        "cg_converged": true,
+        "rho": 1.5,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 25,
+        "risk_objective": 0.0626323431710431,
+        "position_losses": {
+          "p0": 0.05767642911857329,
+          "p1": 0.06106843673304198,
+          "p2": 0.07212186809793027
+        },
+        "bound_violation_db": 2.548188686115904,
+        "primal_residual": 0.0055983549928804366,
+        "dual_residual": 0.0027867428549545447,
+        "maximum_relative_primal": 1.670709895826534,
+        "maximum_relative_dual": 0.2025303748189395,
+        "cg_iterations": 80,
+        "cg_converged": true,
+        "rho": 1.5,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 26,
+        "risk_objective": 0.0627337763368064,
+        "position_losses": {
+          "p0": 0.057764690877371905,
+          "p1": 0.061173429412999435,
+          "p2": 0.0722457053949635
+        },
+        "bound_violation_db": 2.4876357601271595,
+        "primal_residual": 0.0053920641636669145,
+        "dual_residual": 0.0024321374560900555,
+        "maximum_relative_primal": 1.639936945365699,
+        "maximum_relative_dual": 0.1854129339092483,
+        "cg_iterations": 79,
+        "cg_converged": true,
+        "rho": 1.5,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 27,
+        "risk_objective": 0.0628282900617131,
+        "position_losses": {
+          "p0": 0.05784351515412889,
+          "p1": 0.06127075897049754,
+          "p2": 0.0723639398883276
+        },
+        "bound_violation_db": 2.4292755608864476,
+        "primal_residual": 0.0052234741692234075,
+        "dual_residual": 0.002146455332638673,
+        "maximum_relative_primal": 1.610115554162252,
+        "maximum_relative_dual": 0.13749164108667386,
+        "cg_iterations": 79,
+        "cg_converged": true,
+        "rho": 1.5,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 28,
+        "risk_objective": 0.06291789647823662,
+        "position_losses": {
+          "p0": 0.05791614147648048,
+          "p1": 0.06136275820703867,
+          "p2": 0.0724776946222439
+        },
+        "bound_violation_db": 2.3770803898087007,
+        "primal_residual": 0.005051279087933712,
+        "dual_residual": 0.0020488076013296993,
+        "maximum_relative_primal": 1.5821366434214543,
+        "maximum_relative_dual": 0.3780436272466935,
+        "cg_iterations": 77,
+        "cg_converged": true,
+        "rho": 1.5,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 29,
+        "risk_objective": 0.06300318450171674,
+        "position_losses": {
+          "p0": 0.05798294935442602,
+          "p1": 0.061450670665468915,
+          "p2": 0.07258922574802722
+        },
+        "bound_violation_db": 2.329355552705042,
+        "primal_residual": 0.00489033470390841,
+        "dual_residual": 0.001854552238921192,
+        "maximum_relative_primal": 1.5513501612188951,
+        "maximum_relative_dual": 0.19875314307289482,
+        "cg_iterations": 79,
+        "cg_converged": true,
+        "rho": 1.5,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 30,
+        "risk_objective": 0.06308593883585016,
+        "position_losses": {
+          "p0": 0.058046509513794406,
+          "p1": 0.061536449060954686,
+          "p2": 0.07269952671704914
+        },
+        "bound_violation_db": 2.284584587808904,
+        "primal_residual": 0.00475338923278567,
+        "dual_residual": 0.0017197079039614456,
+        "maximum_relative_primal": 1.5225793374620673,
+        "maximum_relative_dual": 0.18560578644993997,
+        "cg_iterations": 75,
+        "cg_converged": true,
+        "rho": 1.5,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 31,
+        "risk_objective": 0.06316737294817291,
+        "position_losses": {
+          "p0": 0.05810875558570332,
+          "p1": 0.06162118208242105,
+          "p2": 0.07280884028367972
+        },
+        "bound_violation_db": 2.2409264056143243,
+        "primal_residual": 0.004634030851166426,
+        "dual_residual": 0.0015809115085620674,
+        "maximum_relative_primal": 1.4953564345564072,
+        "maximum_relative_dual": 0.12219915097706913,
+        "cg_iterations": 78,
+        "cg_converged": true,
+        "rho": 1.5,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 32,
+        "risk_objective": 0.06324827626857006,
+        "position_losses": {
+          "p0": 0.05817097986883424,
+          "p1": 0.06170553547990121,
+          "p2": 0.07291726074637711
+        },
+        "bound_violation_db": 2.196955314542441,
+        "primal_residual": 0.00452594727451162,
+        "dual_residual": 0.0014592196343206185,
+        "maximum_relative_primal": 1.4694342316950182,
+        "maximum_relative_dual": 0.11523498476674965,
+        "cg_iterations": 76,
+        "cg_converged": true,
+        "rho": 1.5,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 33,
+        "risk_objective": 0.0633286820188399,
+        "position_losses": {
+          "p0": 0.05823310394459433,
+          "p1": 0.06178961693954586,
+          "p2": 0.07302509359210219
+        },
+        "bound_violation_db": 2.153468969046797,
+        "primal_residual": 0.056500384755724255,
+        "dual_residual": 0.08499027504536841,
+        "maximum_relative_primal": 10.45953301425302,
+        "maximum_relative_dual": 15.756350479543118,
+        "cg_iterations": 75,
+        "cg_converged": true,
+        "rho": 1.5,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 34,
+        "risk_objective": 0.06350161900404637,
+        "position_losses": {
+          "p0": 0.05817931734075562,
+          "p1": 0.061923325275749994,
+          "p2": 0.07346457700052236
+        },
+        "bound_violation_db": 17.592972489969153,
+        "primal_residual": 0.016505710630158658,
+        "dual_residual": 0.06313864354314475,
+        "maximum_relative_primal": 2.967685373425437,
+        "maximum_relative_dual": 11.215611719773603,
+        "cg_iterations": 122,
+        "cg_converged": true,
+        "rho": 1.5,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 3
+      },
+      {
+        "iteration": 35,
+        "risk_objective": 0.0633107280477409,
+        "position_losses": {
+          "p0": 0.058035073674547466,
+          "p1": 0.06171563431039867,
+          "p2": 0.07319196967427348
+        },
+        "bound_violation_db": 18.12897192330719,
+        "primal_residual": 0.0112699255951326,
+        "dual_residual": 0.014334346972549773,
+        "maximum_relative_primal": 1.8637940391477728,
+        "maximum_relative_dual": 1.3327216655633949,
+        "cg_iterations": 123,
+        "cg_converged": true,
+        "rho": 1.5,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 3
+      },
+      {
+        "iteration": 36,
+        "risk_objective": 0.06336360784063967,
+        "position_losses": {
+          "p0": 0.05811865016655486,
+          "p1": 0.06176372693579125,
+          "p2": 0.07319700878413433
+        },
+        "bound_violation_db": 23.01170217572964,
+        "primal_residual": 0.008815338346159338,
+        "dual_residual": 0.008618278365997298,
+        "maximum_relative_primal": 1.372851188337363,
+        "maximum_relative_dual": 0.644586409977316,
+        "cg_iterations": 81,
+        "cg_converged": true,
+        "rho": 1.5,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 37,
+        "risk_objective": 0.06344918771332457,
+        "position_losses": {
+          "p0": 0.058228416334079464,
+          "p1": 0.06185103571061874,
+          "p2": 0.07325199428980625
+        },
+        "bound_violation_db": 17.172816756538065,
+        "primal_residual": 0.006880366723649913,
+        "dual_residual": 0.007205953543813148,
+        "maximum_relative_primal": 1.036914746394247,
+        "maximum_relative_dual": 1.4067017525216754,
+        "cg_iterations": 81,
+        "cg_converged": true,
+        "rho": 1.5,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 38,
+        "risk_objective": 0.06352872040451031,
+        "position_losses": {
+          "p0": 0.0583256905510965,
+          "p1": 0.061934566543826716,
+          "p2": 0.07331495633070337
+        },
+        "bound_violation_db": 9.142394392148631,
+        "primal_residual": 0.005645275615302923,
+        "dual_residual": 0.005825995539634341,
+        "maximum_relative_primal": 0.8916827559435699,
+        "maximum_relative_dual": 0.5164031397497106,
+        "cg_iterations": 77,
+        "cg_converged": true,
+        "rho": 1.5,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 39,
+        "risk_objective": 0.06359161499801941,
+        "position_losses": {
+          "p0": 0.05840383374577531,
+          "p1": 0.062000525219295,
+          "p2": 0.07336455975042314
+        },
+        "bound_violation_db": 4.2635271935602335,
+        "primal_residual": 0.004630289305835284,
+        "dual_residual": 0.005277840904103965,
+        "maximum_relative_primal": 0.8625237287642095,
+        "maximum_relative_dual": 0.5200541323921365,
+        "cg_iterations": 77,
+        "cg_converged": true,
+        "rho": 1.5,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 40,
+        "risk_objective": 0.06363658963811926,
+        "position_losses": {
+          "p0": 0.05846116354549133,
+          "p1": 0.06204707998978087,
+          "p2": 0.07339815162706513
+        },
+        "bound_violation_db": 1.9133942966709536,
+        "primal_residual": 0.003943772504665681,
+        "dual_residual": 0.004499307700163302,
+        "maximum_relative_primal": 0.8551094288461297,
+        "maximum_relative_dual": 0.4301837817888048,
+        "cg_iterations": 81,
+        "cg_converged": true,
+        "rho": 1.5,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 41,
+        "risk_objective": 0.06366486685887404,
+        "position_losses": {
+          "p0": 0.05849804434162129,
+          "p1": 0.0620756432240547,
+          "p2": 0.07341744498841025
+        },
+        "bound_violation_db": 1.168057325739599,
+        "primal_residual": 0.003596614364263705,
+        "dual_residual": 0.0034079454010949783,
+        "maximum_relative_primal": 0.842686329733703,
+        "maximum_relative_dual": 0.27269887821837085,
+        "cg_iterations": 79,
+        "cg_converged": true,
+        "rho": 1.5,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 42,
+        "risk_objective": 0.0636824249470178,
+        "position_losses": {
+          "p0": 0.05851994693629489,
+          "p1": 0.06209255878881079,
+          "p2": 0.07342932978962557
+        },
+        "bound_violation_db": 1.1355391785322029,
+        "primal_residual": 0.0034022353319727483,
+        "dual_residual": 0.0023865942698288603,
+        "maximum_relative_primal": 0.8270005817604242,
+        "maximum_relative_dual": 0.19464029062223,
+        "cg_iterations": 78,
+        "cg_converged": true,
+        "rho": 1.5,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 43,
+        "risk_objective": 0.0636929268040399,
+        "position_losses": {
+          "p0": 0.05853089033317772,
+          "p1": 0.062102019372818805,
+          "p2": 0.0734377456636676
+        },
+        "bound_violation_db": 1.1037105115625812,
+        "primal_residual": 0.0032259718128619004,
+        "dual_residual": 0.0016188289528190878,
+        "maximum_relative_primal": 0.8105193952291775,
+        "maximum_relative_dual": 0.12833705465064033,
+        "cg_iterations": 80,
+        "cg_converged": true,
+        "rho": 1.5,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 44,
+        "risk_objective": 0.06370014058370761,
+        "position_losses": {
+          "p0": 0.058535441732524604,
+          "p1": 0.06210813581173552,
+          "p2": 0.07344618149354037
+        },
+        "bound_violation_db": 1.0745641633071654,
+        "primal_residual": 0.0030336797791755458,
+        "dual_residual": 0.0012758667265685608,
+        "maximum_relative_primal": 0.7946397624620766,
+        "maximum_relative_dual": 0.10380909644323517,
+        "cg_iterations": 80,
+        "cg_converged": true,
+        "rho": 1.5,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 45,
+        "risk_objective": 0.06370737454735896,
+        "position_losses": {
+          "p0": 0.05853785419451521,
+          "p1": 0.062114441032078346,
+          "p2": 0.07345735510147419
+        },
+        "bound_violation_db": 1.0492200733051522,
+        "primal_residual": 0.002778773092796235,
+        "dual_residual": 0.001366987200365394,
+        "maximum_relative_primal": 0.7800920387260837,
+        "maximum_relative_dual": 0.3284472317481843,
+        "cg_iterations": 78,
+        "cg_converged": true,
+        "rho": 1.5,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 46,
+        "risk_objective": 0.06371982738007065,
+        "position_losses": {
+          "p0": 0.058543331863267455,
+          "p1": 0.062126540126007615,
+          "p2": 0.07347733499214351
+        },
+        "bound_violation_db": 1.0225958701250557,
+        "primal_residual": 0.002607307122591523,
+        "dual_residual": 0.0012824887319170548,
+        "maximum_relative_primal": 0.7634466144258258,
+        "maximum_relative_dual": 0.24469131742495367,
+        "cg_iterations": 76,
+        "cg_converged": true,
+        "rho": 1.5,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 47,
+        "risk_objective": 0.06373686758291552,
+        "position_losses": {
+          "p0": 0.05855238780264225,
+          "p1": 0.06214373298363812,
+          "p2": 0.0735040218546236
+        },
+        "bound_violation_db": 0.9979717393484433,
+        "primal_residual": 0.002484350023657047,
+        "dual_residual": 0.0011811495616884983,
+        "maximum_relative_primal": 0.7470608963876063,
+        "maximum_relative_dual": 0.21818390600614895,
+        "cg_iterations": 78,
+        "cg_converged": true,
+        "rho": 1.5,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      },
+      {
+        "iteration": 48,
+        "risk_objective": 0.0637569109608772,
+        "position_losses": {
+          "p0": 0.058564148661046644,
+          "p1": 0.062164376677044164,
+          "p2": 0.07353482486168497
+        },
+        "bound_violation_db": 0.9773034678039809,
+        "primal_residual": 0.002407221608604656,
+        "dual_residual": 0.0009643897519200715,
+        "maximum_relative_primal": 0.7326682758696313,
+        "maximum_relative_dual": 0.060265323391004995,
+        "cg_iterations": 76,
+        "cg_converged": true,
+        "rho": 1.5,
+        "risk_inner_converged": true,
+        "risk_inner_steps": 2
+      }
+    ],
+    "lower_bound_method": "supporting_halfplanes",
+    "admm_penalty_metric": "root_data_diagonal",
+    "over_relaxation": 1.0,
+    "penalty_adaptation": "rms",
+    "full_tap_feasible_block_refinement": true,
+    "returned_bound_diagnostics": [
+      {
+        "channel": "FL",
+        "frequency_hz": 74.70703125,
+        "violation_db": 0.14999972159236816,
+        "bound": "upper"
+      },
+      {
+        "channel": "FR",
+        "frequency_hz": 21.97265625,
+        "violation_db": 0.14999999192742575,
+        "bound": "lower"
+      },
+      {
+        "channel": "C",
+        "frequency_hz": 1.46484375,
+        "violation_db": 0.14999999744167392,
+        "bound": "lower"
+      },
+      {
+        "channel": "SLA",
+        "frequency_hz": 76.171875,
+        "violation_db": 0.14999973679416057,
+        "bound": "upper"
+      },
+      {
+        "channel": "SRA",
+        "frequency_hz": 76.171875,
+        "violation_db": 0.14999957536713326,
+        "bound": "upper"
+      },
+      {
+        "channel": "SBL",
+        "frequency_hz": 76.171875,
+        "violation_db": 0.1499998506819753,
+        "bound": "upper"
+      },
+      {
+        "channel": "SBR",
+        "frequency_hz": 83.49609375,
+        "violation_db": 0.14999913390719324,
+        "bound": "upper"
+      },
+      {
+        "channel": "TFL",
+        "frequency_hz": 83.49609375,
+        "violation_db": 0.1499998450010401,
+        "bound": "upper"
+      },
+      {
+        "channel": "TFR",
+        "frequency_hz": 21.97265625,
+        "violation_db": 0.14999999910491474,
+        "bound": "lower"
+      },
+      {
+        "channel": "TRL",
+        "frequency_hz": 87.890625,
+        "violation_db": 0.14999985543931582,
+        "bound": "upper"
+      },
+      {
+        "channel": "TRR",
+        "frequency_hz": 87.890625,
+        "violation_db": 0.14999973132092617,
+        "bound": "upper"
+      },
+      {
+        "channel": "SW1",
+        "frequency_hz": 71.77734375,
+        "violation_db": 0.14999999999993274,
+        "bound": "lower"
+      }
+    ],
+    "last_iterate_bound_diagnostics": [
+      {
+        "channel": "FL",
+        "frequency_hz": 23.4375,
+        "violation_db": 0.4322569633656591,
+        "bound": "lower"
+      },
+      {
+        "channel": "FR",
+        "frequency_hz": 23.4375,
+        "violation_db": 0.5859013295668628,
+        "bound": "lower"
+      },
+      {
+        "channel": "C",
+        "frequency_hz": 23.4375,
+        "violation_db": 0.39833766856620484,
+        "bound": "lower"
+      },
+      {
+        "channel": "SLA",
+        "frequency_hz": 23.4375,
+        "violation_db": 0.35226197346352744,
+        "bound": "lower"
+      },
+      {
+        "channel": "SRA",
+        "frequency_hz": 26.3671875,
+        "violation_db": 0.3638564628499916,
+        "bound": "lower"
+      },
+      {
+        "channel": "SBL",
+        "frequency_hz": 73.2421875,
+        "violation_db": 0.24415803986959972,
+        "bound": "upper"
+      },
+      {
+        "channel": "SBR",
+        "frequency_hz": 74.70703125,
+        "violation_db": 0.1761006264244056,
+        "bound": "upper"
+      },
+      {
+        "channel": "TFL",
+        "frequency_hz": 123.046875,
+        "violation_db": 0.16094383279325955,
+        "bound": "upper"
+      },
+      {
+        "channel": "TFR",
+        "frequency_hz": 86.42578125,
+        "violation_db": 0.25332473960607516,
+        "bound": "upper"
+      },
+      {
+        "channel": "TRL",
+        "frequency_hz": 29.296875,
+        "violation_db": 0.4036081358515528,
+        "bound": "lower"
+      },
+      {
+        "channel": "TRR",
+        "frequency_hz": 87.890625,
+        "violation_db": 0.3780840628774109,
+        "bound": "upper"
+      },
+      {
+        "channel": "SW1",
+        "frequency_hz": 71.77734375,
+        "violation_db": 0.9773034678039809,
+        "bound": "lower"
+      }
+    ],
+    "global_optimality_claimed": false,
+    "native_hardware_verified": false,
+    "notice": "All native FIR taps and observation cross terms are retained. Annular magnitude constraints are nonconvex; numerical convergence is not global optimality or hardware validation.",
+    "writable_native_coefficients": 11968,
+    "verified_native_synthesis_available": false,
+    "supplied_native_parameter_model": false,
+    "design_space": "expanded_causal_fir_reference",
+    "native_realization_notice": "Expanded FIR taps are not independent native DSP parameters. XT32 coefficient compression and actual synthesis require a supplied validated model; this is a full-FIR reference candidate, not proof of native realizability."
+  },
+  "joint_evaluation": {
+    "identity": {
+      "rows": [
+        {
+          "source": "C",
+          "position": "p0",
+          "magnitude_rms_db": 3.7605162822642004,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "C",
+          "position": "p1",
+          "magnitude_rms_db": 3.8519682161542654,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "C",
+          "position": "p2",
+          "magnitude_rms_db": 3.9434096770976574,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "FL",
+          "position": "p0",
+          "magnitude_rms_db": 3.629402033336161,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "FL",
+          "position": "p1",
+          "magnitude_rms_db": 3.715203065108121,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "FL",
+          "position": "p2",
+          "magnitude_rms_db": 3.79991951186474,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "FR",
+          "position": "p0",
+          "magnitude_rms_db": 3.6945388648391955,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "FR",
+          "position": "p1",
+          "magnitude_rms_db": 3.7831046428223094,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "FR",
+          "position": "p2",
+          "magnitude_rms_db": 3.8711514321248783,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "LFE",
+          "position": "p0",
+          "magnitude_rms_db": 7.457813835244489,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "LFE",
+          "position": "p1",
+          "magnitude_rms_db": 7.545363749045259,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "LFE",
+          "position": "p2",
+          "magnitude_rms_db": 7.313151918842766,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SBL",
+          "position": "p0",
+          "magnitude_rms_db": 3.961311152901922,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SBL",
+          "position": "p1",
+          "magnitude_rms_db": 4.063823229624643,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SBL",
+          "position": "p2",
+          "magnitude_rms_db": 4.168436184123207,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SBR",
+          "position": "p0",
+          "magnitude_rms_db": 4.029705552467156,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SBR",
+          "position": "p1",
+          "magnitude_rms_db": 4.137389421387758,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SBR",
+          "position": "p2",
+          "magnitude_rms_db": 4.248653340446496,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SLA",
+          "position": "p0",
+          "magnitude_rms_db": 3.8269577405161077,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SLA",
+          "position": "p1",
+          "magnitude_rms_db": 3.9217163566220146,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SLA",
+          "position": "p2",
+          "magnitude_rms_db": 4.017111511000406,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SRA",
+          "position": "p0",
+          "magnitude_rms_db": 3.8940245258129407,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SRA",
+          "position": "p1",
+          "magnitude_rms_db": 3.9925893258780256,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SRA",
+          "position": "p2",
+          "magnitude_rms_db": 4.0926781995174375,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TFL",
+          "position": "p0",
+          "magnitude_rms_db": 4.097387512160493,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TFL",
+          "position": "p1",
+          "magnitude_rms_db": 4.210003355333603,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TFL",
+          "position": "p2",
+          "magnitude_rms_db": 4.326695280588428,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TFR",
+          "position": "p0",
+          "magnitude_rms_db": 4.164527738478269,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TFR",
+          "position": "p1",
+          "magnitude_rms_db": 4.283777150274718,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TFR",
+          "position": "p2",
+          "magnitude_rms_db": 4.409027540461606,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TRL",
+          "position": "p0",
+          "magnitude_rms_db": 4.229187647754133,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TRL",
+          "position": "p1",
+          "magnitude_rms_db": 4.354354452561414,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TRL",
+          "position": "p2",
+          "magnitude_rms_db": 4.486058618278623,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TRR",
+          "position": "p0",
+          "magnitude_rms_db": 4.295295836034345,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TRR",
+          "position": "p1",
+          "magnitude_rms_db": 4.432948178705547,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TRR",
+          "position": "p2",
+          "magnitude_rms_db": 4.587876735671981,
+          "repeat_scenarios": 1
+        }
+      ],
+      "mean_group_rms_db": 4.349918883759592,
+      "worst_group_rms_db": 7.545363749045259,
+      "normalized_complex_error": 1.3001741762704258,
+      "weighted_magnitude_rms_db": 4.432852817403225,
+      "level_normalization_after_design": false
+    },
+    "independent_0_4_baseline": {
+      "rows": [
+        {
+          "source": "C",
+          "position": "p0",
+          "magnitude_rms_db": 2.4619019075243234,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "C",
+          "position": "p1",
+          "magnitude_rms_db": 2.5114060220928622,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "C",
+          "position": "p2",
+          "magnitude_rms_db": 2.597178180297229,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "FL",
+          "position": "p0",
+          "magnitude_rms_db": 2.3865487471223523,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "FL",
+          "position": "p1",
+          "magnitude_rms_db": 2.4293630047667993,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "FL",
+          "position": "p2",
+          "magnitude_rms_db": 2.508425947767077,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "FR",
+          "position": "p0",
+          "magnitude_rms_db": 2.4232060122847843,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "FR",
+          "position": "p1",
+          "magnitude_rms_db": 2.4694808338524075,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "FR",
+          "position": "p2",
+          "magnitude_rms_db": 2.5520664410762373,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "LFE",
+          "position": "p0",
+          "magnitude_rms_db": 6.891851442800743,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "LFE",
+          "position": "p1",
+          "magnitude_rms_db": 6.969252883006887,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "LFE",
+          "position": "p2",
+          "magnitude_rms_db": 6.699782932615941,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SBL",
+          "position": "p0",
+          "magnitude_rms_db": 2.6173902539885474,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SBL",
+          "position": "p1",
+          "magnitude_rms_db": 2.6795421865658664,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SBL",
+          "position": "p2",
+          "magnitude_rms_db": 2.7783215791278173,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SBR",
+          "position": "p0",
+          "magnitude_rms_db": 2.69066039006398,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SBR",
+          "position": "p1",
+          "magnitude_rms_db": 2.758887925024312,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SBR",
+          "position": "p2",
+          "magnitude_rms_db": 2.8643892345111284,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SLA",
+          "position": "p0",
+          "magnitude_rms_db": 2.5054754443394067,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SLA",
+          "position": "p1",
+          "magnitude_rms_db": 2.5587446243100365,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SLA",
+          "position": "p2",
+          "magnitude_rms_db": 2.6484859213231164,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SRA",
+          "position": "p0",
+          "magnitude_rms_db": 2.556559944111814,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SRA",
+          "position": "p1",
+          "magnitude_rms_db": 2.6140506449373184,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SRA",
+          "position": "p2",
+          "magnitude_rms_db": 2.7082433160860813,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TFL",
+          "position": "p0",
+          "magnitude_rms_db": 2.7782081149059312,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TFL",
+          "position": "p1",
+          "magnitude_rms_db": 2.85226792076451,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TFL",
+          "position": "p2",
+          "magnitude_rms_db": 2.963079042773847,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TFR",
+          "position": "p0",
+          "magnitude_rms_db": 2.8822698290604216,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TFR",
+          "position": "p1",
+          "magnitude_rms_db": 2.9645775196902595,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TFR",
+          "position": "p2",
+          "magnitude_rms_db": 3.08489077447775,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TRL",
+          "position": "p0",
+          "magnitude_rms_db": 3.0018938080898576,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TRL",
+          "position": "p1",
+          "magnitude_rms_db": 3.0913349155405556,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TRL",
+          "position": "p2",
+          "magnitude_rms_db": 3.2182777423146454,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TRR",
+          "position": "p0",
+          "magnitude_rms_db": 3.1429231924653656,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TRR",
+          "position": "p1",
+          "magnitude_rms_db": 3.2438161869214808,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TRR",
+          "position": "p2",
+          "magnitude_rms_db": 3.3869628303353574,
+          "repeat_scenarios": 1
+        }
+      ],
+      "mean_group_rms_db": 3.096992158248251,
+      "worst_group_rms_db": 6.969252883006887,
+      "normalized_complex_error": 0.27248091343381825,
+      "weighted_magnitude_rms_db": 3.2938659722174646,
+      "level_normalization_after_design": false
+    },
+    "joint": {
+      "rows": [
+        {
+          "source": "C",
+          "position": "p0",
+          "magnitude_rms_db": 2.0001070349738703,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "C",
+          "position": "p1",
+          "magnitude_rms_db": 2.0412717737213346,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "C",
+          "position": "p2",
+          "magnitude_rms_db": 2.172401992474858,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "FL",
+          "position": "p0",
+          "magnitude_rms_db": 1.904983044681229,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "FL",
+          "position": "p1",
+          "magnitude_rms_db": 1.9391519656383387,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "FL",
+          "position": "p2",
+          "magnitude_rms_db": 2.063650028448549,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "FR",
+          "position": "p0",
+          "magnitude_rms_db": 1.9598554971712323,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "FR",
+          "position": "p1",
+          "magnitude_rms_db": 1.9985401743472033,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "FR",
+          "position": "p2",
+          "magnitude_rms_db": 2.1256923755048867,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "LFE",
+          "position": "p0",
+          "magnitude_rms_db": 7.644444645622297,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "LFE",
+          "position": "p1",
+          "magnitude_rms_db": 7.716097424683189,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "LFE",
+          "position": "p2",
+          "magnitude_rms_db": 7.460762169186592,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SBL",
+          "position": "p0",
+          "magnitude_rms_db": 2.199302996650683,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SBL",
+          "position": "p1",
+          "magnitude_rms_db": 2.261380899725916,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SBL",
+          "position": "p2",
+          "magnitude_rms_db": 2.4073109689207444,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SBR",
+          "position": "p0",
+          "magnitude_rms_db": 2.27859391290664,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SBR",
+          "position": "p1",
+          "magnitude_rms_db": 2.3490847378337913,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SBR",
+          "position": "p2",
+          "magnitude_rms_db": 2.503015202543577,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SLA",
+          "position": "p0",
+          "magnitude_rms_db": 2.0661372392096244,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SLA",
+          "position": "p1",
+          "magnitude_rms_db": 2.1143371204772845,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SLA",
+          "position": "p2",
+          "magnitude_rms_db": 2.2493641347092055,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SRA",
+          "position": "p0",
+          "magnitude_rms_db": 2.143788182875881,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SRA",
+          "position": "p1",
+          "magnitude_rms_db": 2.1996576656906446,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "SRA",
+          "position": "p2",
+          "magnitude_rms_db": 2.3377935920667214,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TFL",
+          "position": "p0",
+          "magnitude_rms_db": 2.3728551088545555,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TFL",
+          "position": "p1",
+          "magnitude_rms_db": 2.4515073498885784,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TFL",
+          "position": "p2",
+          "magnitude_rms_db": 2.61044352415309,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TFR",
+          "position": "p0",
+          "magnitude_rms_db": 2.483427654760286,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TFR",
+          "position": "p1",
+          "magnitude_rms_db": 2.5719121824384836,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TFR",
+          "position": "p2",
+          "magnitude_rms_db": 2.7394083766281345,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TRL",
+          "position": "p0",
+          "magnitude_rms_db": 2.645753473468633,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TRL",
+          "position": "p1",
+          "magnitude_rms_db": 2.742477068421845,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TRL",
+          "position": "p2",
+          "magnitude_rms_db": 2.907678536370723,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TRR",
+          "position": "p0",
+          "magnitude_rms_db": 2.8270814213572306,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TRR",
+          "position": "p1",
+          "magnitude_rms_db": 2.9384251048935632,
+          "repeat_scenarios": 1
+        },
+        {
+          "source": "TRR",
+          "position": "p2",
+          "magnitude_rms_db": 3.1200802350541337,
+          "repeat_scenarios": 1
+        }
+      ],
+      "mean_group_rms_db": 2.79299374489871,
+      "worst_group_rms_db": 7.716097424683189,
+      "normalized_complex_error": 0.1130024008737362,
+      "weighted_magnitude_rms_db": 3.1478075570691066,
+      "level_normalization_after_design": false
+    },
+    "comparison_to_oca": "not_established_no_same_data_reference_run",
+    "holdout": {
+      "positions": [
+        "p3"
+      ],
+      "used_for_design": false,
+      "identity": {
+        "rows": [
+          {
+            "source": "C",
+            "position": "p3",
+            "magnitude_rms_db": 4.036726455199246,
+            "repeat_scenarios": 1
+          },
+          {
+            "source": "FL",
+            "position": "p3",
+            "magnitude_rms_db": 3.8853644670318084,
+            "repeat_scenarios": 1
+          },
+          {
+            "source": "FR",
+            "position": "p3",
+            "magnitude_rms_db": 3.9605279129340096,
+            "repeat_scenarios": 1
+          },
+          {
+            "source": "LFE",
+            "position": "p3",
+            "magnitude_rms_db": 7.130687822789069,
+            "repeat_scenarios": 1
+          },
+          {
+            "source": "SBL",
+            "position": "p3",
+            "magnitude_rms_db": 4.2773095179222524,
+            "repeat_scenarios": 1
+          },
+          {
+            "source": "SBR",
+            "position": "p3",
+            "magnitude_rms_db": 4.366120353266427,
+            "repeat_scenarios": 1
+          },
+          {
+            "source": "SLA",
+            "position": "p3",
+            "magnitude_rms_db": 4.115088759038171,
+            "repeat_scenarios": 1
+          },
+          {
+            "source": "SRA",
+            "position": "p3",
+            "magnitude_rms_db": 4.196459065551085,
+            "repeat_scenarios": 1
+          },
+          {
+            "source": "TFL",
+            "position": "p3",
+            "magnitude_rms_db": 4.450030372665819,
+            "repeat_scenarios": 1
+          },
+          {
+            "source": "TFR",
+            "position": "p3",
+            "magnitude_rms_db": 4.542921894838427,
+            "repeat_scenarios": 1
+          },
+          {
+            "source": "TRL",
+            "position": "p3",
+            "magnitude_rms_db": 4.626939303401612,
+            "repeat_scenarios": 1
+          },
+          {
+            "source": "TRR",
+            "position": "p3",
+            "magnitude_rms_db": 4.777062625084523,
+            "repeat_scenarios": 1
+          }
+        ],
+        "mean_group_rms_db": 4.530436545810205,
+        "worst_group_rms_db": 7.130687822789069,
+        "normalized_complex_error": 1.6135635914372939,
+        "weighted_magnitude_rms_db": 4.605215519997382,
+        "level_normalization_after_design": false
+      },
+      "independent_0_4_baseline": {
+        "rows": [
+          {
+            "source": "C",
+            "position": "p3",
+            "magnitude_rms_db": 2.7124604605163847,
+            "repeat_scenarios": 1
+          },
+          {
+            "source": "FL",
+            "position": "p3",
+            "magnitude_rms_db": 2.617017799780394,
+            "repeat_scenarios": 1
+          },
+          {
+            "source": "FR",
+            "position": "p3",
+            "magnitude_rms_db": 2.664203516023905,
+            "repeat_scenarios": 1
+          },
+          {
+            "source": "LFE",
+            "position": "p3",
+            "magnitude_rms_db": 6.4823221062336405,
+            "repeat_scenarios": 1
+          },
+          {
+            "source": "SBL",
+            "position": "p3",
+            "magnitude_rms_db": 2.9070642303892074,
+            "repeat_scenarios": 1
+          },
+          {
+            "source": "SBR",
+            "position": "p3",
+            "magnitude_rms_db": 3.0008004432323516,
+            "repeat_scenarios": 1
+          },
+          {
+            "source": "SLA",
+            "position": "p3",
+            "magnitude_rms_db": 2.7679262258450374,
+            "repeat_scenarios": 1
+          },
+          {
+            "source": "SRA",
+            "position": "p3",
+            "magnitude_rms_db": 2.832477027226033,
+            "repeat_scenarios": 1
+          },
+          {
+            "source": "TFL",
+            "position": "p3",
+            "magnitude_rms_db": 3.1042430963938745,
+            "repeat_scenarios": 1
+          },
+          {
+            "source": "TFR",
+            "position": "p3",
+            "magnitude_rms_db": 3.2370430092833766,
+            "repeat_scenarios": 1
+          },
+          {
+            "source": "TRL",
+            "position": "p3",
+            "magnitude_rms_db": 3.3766694712715686,
+            "repeat_scenarios": 1
+          },
+          {
+            "source": "TRR",
+            "position": "p3",
+            "magnitude_rms_db": 3.5707084345197893,
+            "repeat_scenarios": 1
+          }
+        ],
+        "mean_group_rms_db": 3.272744651726297,
+        "worst_group_rms_db": 6.4823221062336405,
+        "normalized_complex_error": 0.3066475800891152,
+        "weighted_magnitude_rms_db": 3.4245620122289004,
+        "level_normalization_after_design": false
+      },
+      "joint": {
+        "rows": [
+          {
+            "source": "C",
+            "position": "p3",
+            "magnitude_rms_db": 2.362772522077281,
+            "repeat_scenarios": 1
+          },
+          {
+            "source": "FL",
+            "position": "p3",
+            "magnitude_rms_db": 2.247449426675971,
+            "repeat_scenarios": 1
+          },
+          {
+            "source": "FR",
+            "position": "p3",
+            "magnitude_rms_db": 2.3112709956385515,
+            "repeat_scenarios": 1
+          },
+          {
+            "source": "LFE",
+            "position": "p3",
+            "magnitude_rms_db": 7.25492754230323,
+            "repeat_scenarios": 1
+          },
+          {
+            "source": "SBL",
+            "position": "p3",
+            "magnitude_rms_db": 2.6095060362305302,
+            "repeat_scenarios": 1
+          },
+          {
+            "source": "SBR",
+            "position": "p3",
+            "magnitude_rms_db": 2.7137749177185806,
+            "repeat_scenarios": 1
+          },
+          {
+            "source": "SLA",
+            "position": "p3",
+            "magnitude_rms_db": 2.441942278133313,
+            "repeat_scenarios": 1
+          },
+          {
+            "source": "SRA",
+            "position": "p3",
+            "magnitude_rms_db": 2.5314281037445463,
+            "repeat_scenarios": 1
+          },
+          {
+            "source": "TFL",
+            "position": "p3",
+            "magnitude_rms_db": 2.824496931349729,
+            "repeat_scenarios": 1
+          },
+          {
+            "source": "TFR",
+            "position": "p3",
+            "magnitude_rms_db": 2.96188725682702,
+            "repeat_scenarios": 1
+          },
+          {
+            "source": "TRL",
+            "position": "p3",
+            "magnitude_rms_db": 3.1227046380278765,
+            "repeat_scenarios": 1
+          },
+          {
+            "source": "TRR",
+            "position": "p3",
+            "magnitude_rms_db": 3.3699233500005072,
+            "repeat_scenarios": 1
+          }
+        ],
+        "mean_group_rms_db": 3.062673666560594,
+        "worst_group_rms_db": 7.25492754230323,
+        "normalized_complex_error": 0.1444266412617912,
+        "weighted_magnitude_rms_db": 3.3293293023998847,
+        "level_normalization_after_design": false
+      }
+    }
+  },
+  "runtime_seconds": 151.41446599999472,
+  "notice": "An abstract deterministic fixture, not measurements of the user's row. Feasibility, exact-risk computation and held-out evaluation are separate from numerical convergence and hardware validation."
+}

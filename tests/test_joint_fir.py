@@ -5,11 +5,12 @@ from pathlib import Path
 import tempfile
 import threading
 import unittest
+from scipy.optimize import minimize
 
 import numpy as np
 from scipy import sparse
 
-from audioseyx.joint_fir import FilterSpace, Observation, JointFIRProblem, project_supported_disk
+from audioseyx.joint_fir import FilterSpace, Observation, JointFIRProblem, project_supported_disk, FrequencyBlockInverse, AndersonHistory
 from audioseyx.native_joint import prepare_native_problem, design_native_joint, evaluate_joint
 from audioseyx.measurement_quality import frequency_dependent_response, repeat_diagnostics
 from audioseyx.model import Measurement, Project
@@ -36,6 +37,90 @@ def flat_project(positions=("p0","p1"), channels=("FL","SW1"), repeats=1):
 
 
 class FullSpaceOperatorTests(unittest.TestCase):
+    def test_multisecant_acceleration_preserves_all_state_coordinates(self):
+        history=AndersonHistory(3);matrix=np.array([[.95,.01],[0,.8]])
+        value=np.array([2.,-3.])
+        for _ in range(12):
+            mapped=matrix@value
+            proposal=history.proposal(value,mapped)
+            value=mapped if proposal is None else proposal
+        self.assertEqual(value.shape,(2,))
+        self.assertLess(np.linalg.norm(value),1e-6)
+    def test_small_needed_updates_are_not_lost_against_a_large_absolute_rhs(self):
+        n=64;neutral=np.array([1e6,0.]);one=np.ones(n//2+1,dtype=complex)
+        space=FilterSpace('FL',48000,2,n,neutral,neutral,0,1e8,np.full(2,1e-8))
+        p=JointFIRProblem([space],[Observation('p0','FL',((0,one),),one*(1e6+.01),np.ones(len(one)))],n)
+        result,report=p.solve(iterations=40,risk_weight=0,cg_tolerance=1e-6,regularization_rounds=1)
+        self.assertAlmostEqual(result[0],1e6+.01,delta=1e-6)
+        self.assertLess(p.observation_losses(result)[0],1e-10)
+    def test_exact_risk_admm_matches_a_small_independent_unconstrained_optimization(self):
+        rng=np.random.default_rng(47);n=32;bins=n//2+1
+        neutral=np.array([1.,0.]);spaces=[FilterSpace(c,48000,2,n,neutral,neutral,0,100,np.full(2,.08)) for c in ['FL','SW1']]
+        observations=[]
+        for index,position in enumerate(['centre','left','right']):
+            terms=tuple((i,rng.normal(size=bins)+1j*rng.normal(size=bins)) for i in range(2))
+            observations.append(Observation(position,'FL',terms,np.ones(bins,dtype=complex)*(1+index*.2),np.ones(bins)))
+        p=JointFIRProblem(spaces,observations,n);cache=p.position_quadratics()
+        def gradient(x):return 2*(p.risk_curvature(x,cache,.6,.1)['gradient_half']+p.regularization_apply(x-p.prior))
+        reference=minimize(lambda x:p.risk(x,.6,.1)[0],p.identity,jac=gradient,method='BFGS',options={'gtol':1e-9})
+        result,report=p.solve(iterations=100,rho=.1,risk_weight=.6,risk_temperature=.1,cg_tolerance=1e-10,
+                              regularization_rounds=1,risk_inner_iterations=10,risk_inner_tolerance=1e-9)
+        self.assertEqual(report['spatial_risk_solver'],'exact_logsumexp_newton_cg')
+        self.assertLessEqual(p.risk(result,.6,.1)[0],reference.fun+1e-6)
+    def test_exact_spatial_risk_gradient_and_low_rank_hessian_match_finite_differences(self):
+        rng=np.random.default_rng(129);n=64;bins=n//2+1
+        neutral=np.array([1.,0.,0.,0.])
+        spaces=[FilterSpace(c,48000,4,n,neutral,neutral,0,10,np.full(4,.03)) for c in ['FL','SW1']]
+        observations=[]
+        for position in ['centre','left','right']:
+            terms=tuple((i,rng.normal(size=bins)+1j*rng.normal(size=bins)) for i in range(2))
+            observations.append(Observation(position,'FL',terms,np.ones(bins,dtype=complex),np.ones(bins)))
+        problem=JointFIRProblem(spaces,observations,n);cache=problem.position_quadratics()
+        x=rng.normal(size=8)*.2;v=rng.normal(size=8);eps=1e-6
+        def gradient(value):
+            info=problem.risk_curvature(value,cache,.6,.2)
+            return 2*(info['gradient_half']+problem.regularization_apply(value-problem.prior))
+        info=problem.risk_curvature(x,cache,.6,.2)
+        numerical=(problem.risk(x+eps*v,.6,.2)[0]-problem.risk(x-eps*v,.6,.2)[0])/(2*eps)
+        self.assertAlmostEqual(float(gradient(x)@v),numerical,delta=1e-6)
+        expected=2*(problem.normal_apply(v,info['gram'])+problem.regularization_apply(v)+info['low_rank'].T@(info['low_rank']@v))
+        np.testing.assert_allclose(expected,(gradient(x+eps*v)-gradient(x-eps*v))/(2*eps),atol=1e-6)
+        self.assertGreater(float(v@expected),0)
+    def test_exact_schur_frequency_inverse_matches_dense_for_multiple_subwoofers(self):
+        rng=np.random.default_rng(93);n=64;bins=n//2+1
+        prior=np.array([1.,0.,0.,0.])
+        spaces=[FilterSpace(c,48000,4,n,prior,prior,.1,2,np.full(4,.01)) for c in ['FL','FR','C','SW1','SW2']]
+        observations=[]
+        for main in range(3):
+            terms=tuple((i,rng.normal(size=bins)+1j*rng.normal(size=bins)) for i in [main,3,4])
+            observations.append(Observation('p0',str(main),terms,np.ones(bins,dtype=complex),np.ones(bins)))
+        problem=JointFIRProblem(spaces,observations,n);gram,_=problem.normal_statistics(problem.base_weights)
+        weights=[rng.uniform(.1,2,size=bins) for _ in spaces];rho=.7
+        inverse=FrequencyBlockInverse(spaces,gram,rho,weights)
+        symbol=np.zeros((bins,5,5),dtype=complex)
+        for (i,j),value in gram.items():symbol[:,i,j]=value
+        for i in range(5):symbol[:,i,i]+=.01+rho*weights[i]
+        values=rng.normal(size=(5,bins))+1j*rng.normal(size=(5,bins))
+        expected=np.linalg.solve(symbol,values.T[...,None])[...,0].T
+        self.assertEqual(inverse.kind,'exact_main_sub_schur_blocks')
+        np.testing.assert_allclose(inverse.apply(values),expected,atol=1e-11)
+
+    def test_tolerated_anchor_remains_inside_the_actual_supporting_constraint_set(self):
+        n=128;identity=np.array([0.,1.]);warm=np.array([.005,1.])
+        one=np.ones(n//2+1,dtype=complex)
+        space=FilterSpace('FL',48000,2,n,identity,identity,one.real,one.real,np.full(2,1e-10))
+        target=np.fft.rfft(warm,n)
+        problem=JointFIRProblem([space],[Observation('p0','FL',((0,one),),target,one.real)],n)
+        result,report=problem.solve(iterations=30,regularization_rounds=1,initial=warm,risk_weight=0)
+        self.assertTrue(report['numerically_converged'])
+        self.assertTrue(report['projection_matches_returned_feasible_set'])
+        np.testing.assert_allclose(result,warm,atol=1e-5)
+
+    def test_zero_lower_bound_does_not_add_an_arbitrary_phase_halfplane(self):
+        values=np.array([-1.+0j,-.8+.2j,-1.+0j]);anchor=np.ones(3,dtype=complex)
+        result=project_supported_disk(values,np.zeros(3),np.ones(3)*2,anchor)
+        np.testing.assert_allclose(result,values)
+
     def test_supported_disk_projection_matches_dense_feasible_search(self):
         rng=np.random.default_rng(18)
         values=rng.normal(size=10)+1j*rng.normal(size=10)
@@ -215,6 +300,14 @@ class NativeRoutingTests(unittest.TestCase):
 
 
 class MeasurementWindowTests(unittest.TestCase):
+    def test_explicit_early_fdw_reference_avoids_a_stronger_late_reflection(self):
+        raw=np.zeros(4096);raw[240]=1;raw[1200]=3
+        m=Measurement('FL','p0','early reference',48000,raw)
+        f=np.array([1000.,1800.,3000.])
+        response,report=frequency_dependent_response(m,f,6,reference_sample=240)
+        np.testing.assert_allclose(response,np.exp(-2j*np.pi*f*240/48000),atol=1e-8)
+        self.assertEqual(report['reference_source'],'explicit_analysis_reference')
+        np.testing.assert_array_equal(m.ir,raw)
     def test_repeat_agreement_does_not_invent_phase_or_extrapolate_missing_coverage(self):
         group=[Measurement("FL","p0",str(i),frequency=[1000,2000,4000],magnitude_db=[0,0,0]) for i in range(2)]
         self.assertFalse(repeat_diagnostics(group)["groups"][0]["available"])

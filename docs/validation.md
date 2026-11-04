@@ -19,7 +19,7 @@ The benchmark has no microphone, ADC, clock drift, amplifier nonlinearities or p
 
 ## Current receiver status
 
-Read-only native information, exact-IP HEOS model identification and current speaker-setting reads have been checked on an X3700H. There is no fully validated acoustic correction path in this public prerelease. Stock Float capture and native transfer remain experimental. Fixed capture, native reconstruction at every sample-rate slot, microphone compensation, physical multi-subwoofer validation and incremental composition with stock correction remain open work. Offline joint optimization supports explicitly confirmed independent subwoofer outputs; that computational support is not physical receiver certification.
+Read-only native information, exact-IP HEOS model identification and current speaker-setting reads have been checked on an X3700H. There is no fully validated acoustic correction path in this public prerelease. X3700H Float capture transport, including individual subwoofer addressing, has been checked. Native transfer remains experimental. Fixed capture, native reconstruction at every sample-rate slot, microphone compensation, physical multi-subwoofer validation and incremental composition with stock correction remain open work. Offline joint optimization supports explicitly confirmed independent subwoofer outputs; that computational support is not physical receiver certification.
 
 Hardware reports should state the exact model, firmware, tier, layout, microphone, timing method and operation tested. Discovery, capture, transfer acknowledgement and normal-playback acoustic verification are different milestones.
 
@@ -29,6 +29,7 @@ Hardware reports should state the exact model, firmware, tier, layout, microphon
 python -m unittest discover -s tests -v
 audioseyx --self-test --report self-test.json
 audioseyx --joint-benchmark --report joint-benchmark.json
+audioseyx --listening-area-benchmark --report three-seat-benchmark.json
 python -m sphinx -W --keep-going -b html docs docs/_build/html
 python -m build
 python tools/audit_distribution.py dist
@@ -36,3 +37,7 @@ python -m twine check --strict dist/*.whl dist/*.tar.gz
 ```
 
 Public tests do not need legacy numerical tables. Simulated receiver tests use artificial addresses. No test connects to a physical AVR.
+
+## Three-seat numerical fixture
+
+`--listening-area-benchmark` uses abstract synthetic responses for three measured training seats and a separate held-out point. It checks seat priorities, full XT32 reference dimensionality, returned-filter gain feasibility and exact smooth-risk steps. Passing these assertions does not establish strict numerical convergence or performance in a real row. The recorded report keeps the convergence result explicitly, even when it is false.

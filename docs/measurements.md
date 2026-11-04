@@ -16,9 +16,9 @@ The import limit is 128 MiB. Large projects can be split into smaller batches. F
 
 Connect the receiver's own microphone to its calibration input. The experimental Float driver requests test tones and raw responses through the LAN. Place the microphone before starting a position and move it only when that position has finished. Repeats are retained individually, and a partial checkpoint is saved on failure.
 
-This route is not yet hardware-verified. Fixed-device capture requires a separate sequence; imported stock-app measurements are an alternative. A receiver-generated calibration sweep is not automatically equivalent to a normal-playback verification measurement.
+Capture transport has been checked on an X3700H; microphone compensation and normal-playback timing are not independently verified. Fixed-device capture requires a separate sequence; imported stock-app measurements are an alternative. A receiver-generated calibration sweep is not automatically equivalent to a normal-playback verification measurement.
 
-Review the [configured and physical output selection](layouts.md) before starting. Subwoofer outputs reported as `SWMIX` keep their raw protocol IDs. Excluded configured outputs are recorded explicitly. A microphone appearing as connected does not start measurement; the ready control and capture action are still required.
+Review the [configured and physical output selection](layouts.md) before starting. Subwoofer outputs reported as `SWMIX` retain their configured IDs as provenance, while individual SW IDs are used in sweep/download commands. Excluded configured outputs are recorded explicitly. A microphone appearing as connected does not start measurement; the ready control and capture action are still required.
 
 ## REW
 

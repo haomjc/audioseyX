@@ -118,6 +118,13 @@ def select_capture_outputs(status,channels=None):
     return raw_ids
 
 
+def measurement_command_id(configured_id):
+    """SWMIX entries describe configured mix outputs, not sweep addresses."""
+    if configured_id in {f"SWMIX{i}" for i in range(1,5)}:
+        return "SW"+configured_id[5:]
+    return configured_id
+
+
 def capture_position(receiver, position=1, repeats=1, cancel=None, progress=None, on_measurement=None, settle_seconds=5, channels=None):
     if not receiver.get("connected"):
         raise ValueError('Connect the receiver first')
@@ -133,6 +140,9 @@ def capture_position(receiver, position=1, repeats=1, cancel=None, progress=None
     raw_ids=select_capture_outputs(status,channels)
     order = {name: index for index, name in enumerate(CANONICAL)}
     raw_ids.sort(key=lambda name: order.get(name, 999))
+    command_ids=[measurement_command_id(name) for name in raw_ids]
+    if len(command_ids)!=len(set(command_ids)):
+        raise ValueError("Receiver measurement command identifiers are ambiguous")
     event = cancel or threading.Event()
     if event.is_set():
         raise CaptureCancelled('Measurement preparation stopped')
@@ -146,14 +156,15 @@ def capture_position(receiver, position=1, repeats=1, cancel=None, progress=None
             if event.wait(settle_seconds):
                 raise CaptureCancelled('Measurement preparation stopped')
             # Keep each physical position in its own session; retain raw responses instead of firmware averaging.
-            session.json_command("SET_POSNUM", {"Position": 1, "ChSetup": raw_ids})
+            session.json_command("SET_POSNUM", {"Position": 1, "ChSetup": command_ids})
             total = len(raw_ids) * repeats
             for index, raw_id in enumerate(raw_ids):
                 channel = ALIASES.get(raw_id, raw_id)
+                command_id=command_ids[index]
                 for repeat in range(repeats):
                     if progress:
                         progress(round((index * repeats + repeat) / total * 95), f"Position {position}: measuring {channel}（{repeat + 1}/{repeats}）")
-                    report = session.json_command("START_CHNL", {"Channel": raw_id}, timeout=25, report=True)
+                    report = session.json_command("START_CHNL", {"Channel": command_id}, timeout=25, report=True)
                     details = report.get("ChReport", report)
                     if isinstance(details, list):
                         details = details[0] if details else {}
@@ -161,7 +172,10 @@ def capture_position(receiver, position=1, repeats=1, cancel=None, progress=None
                         raise ValueError('Unsupported receiver measurement report structure')
                     if details.get("SpConnect") == "N" or details.get("Distance") == 0:
                         raise ValueError(channel + ' has no valid speaker response; check connections and subwoofer standby')
-                    raw = session.download_response(raw_id)
+                    configured_setting=next((row[raw_id] for row in status.get('ChSetup',[]) if raw_id in row),None)
+                    if channel.startswith('SW') and configured_setting=='E' and details.get('SpConnect')!='E':
+                        raise ValueError('The AVR did not confirm a subwoofer response for '+command_id+'; response download was stopped to avoid using another speaker\'s data')
+                    raw = session.download_response(command_id)
                     if len(raw) != 16384 * 4:
                         raise ValueError('Unsupported response length returned by this device: ' + str(len(raw)))
                     coefficient = float(details.get("ResponseCoef", report.get("ResponseCoef", 1)))
@@ -172,7 +186,10 @@ def capture_position(receiver, position=1, repeats=1, cancel=None, progress=None
                                               timing_reference="native_receiver_clock_unverified",
                                               metadata={"repeat": repeat + 1, "report": details,
                                                         "receiver_raw_channel_id":raw_id,
+                                                        "receiver_measurement_command_id":command_id,
+                                                        "capture_protocol":"float_individual_sub_addresses_2",
                                                         "selected_capture_outputs":raw_ids,
+                                                        "selected_measurement_command_ids":command_ids,
                                                         "configured_outputs_not_selected":[str(key) for row in status.get("ChSetup",[]) for key,setting in row.items() if setting!="N" and str(key) not in raw_ids],
                                                         "system_delay_reported": value(info, "SysDelay", "SystemDelay"),
                                                         "receiver_mic_processing_verified": False})

@@ -44,6 +44,8 @@ The pure-delay example has a peak time of 4 ms after accounting for the original
 | `native_joint` | `prepare_native_problem(project, tier, settings)` | Complete complex native-routing observations |
 | `joint_fir` | `JointFIRProblem(spaces, observations, nfft)` | Full-tap/custom-routing solver with sparse native synthesis |
 | `measurement_quality` | `frequency_dependent_response(measurement, frequencies, cycles)` | Per-frequency Gaussian windowing |
+| `listening_area` | `resolve_listening_area(project, plan, validation_positions)` | Explicit seat priority and missing-data resolution |
+| `polarity` | `analyze_polarity(project, same_model_groups)` | Reusable same-model relative polarity diagnostics |
 | `realization` | `load_realization(path, tier, model)` | Validate explicitly supplied native synthesis data |
 | `compat` | `compatibility_status()` | Local optional-resource availability |
 
@@ -58,6 +60,7 @@ audioseyx [--port PORT] [--no-browser] [--data-dir DIRECTORY]
 audioseyx --version
 audioseyx --self-test [--report FILE]
 audioseyx --joint-benchmark [--benchmark-iterations 60] [--report FILE]
+audioseyx --listening-area-benchmark [--benchmark-iterations 60] [--report FILE]
 audioseyx --compat-status [--compat-dir DIRECTORY]
 ```
 

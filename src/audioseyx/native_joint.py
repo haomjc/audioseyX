@@ -95,6 +95,15 @@ def prepare_native_problem(project, tier, settings, *, references=None, progress
     scenario_count = sum(row[3] for row in combinations)
     # Estimate measured spectra, cached routing terms, targets and Gram blocks.
     estimated_bytes = bins * (16 * (len(project.measurements) * (len(source_ids) + 1) + scenario_count + len(channels) ** 2) + 8 * 16)
+    if settings.get('joint_exact_spatial_risk',True) and float(settings.get('position_risk',.35))>0 and len(positions)>1:
+        sparse_blocks=len(mains)+len(subs)**2+2*len(mains)*len(subs)
+        parameters=sum(cap.shape(channel)[0] for channel in channels)
+        estimated_bytes+=len(positions)*(bins*16*sparse_blocks+3*parameters*8)
+    acceleration_depth=int(settings.get('joint_anderson_depth',0))
+    if not 0<=acceleration_depth<=8:raise ValueError('Anderson history depth must be 0-8 before allocating the complete problem')
+    if acceleration_depth:
+        native_bins=sum(nfft*cap.shape(c)[1]//rate//2+1 for c in channels)
+        estimated_bytes+=native_bins*4*8*(4*acceleration_depth+8)
     estimated_bytes+=max([128*(len(m.ir)+bins) if m.sample_rate!=rate else 32*nfft for m in project.measurements if m.ir is not None] or [0])
     memory_mib = float(settings.get("joint_memory_mib", 1536))
     if not np.isfinite(memory_mib) or not 128 <= memory_mib <= 32768:
@@ -243,6 +252,8 @@ def prepare_native_problem(project, tier, settings, *, references=None, progress
         raise ValueError("Invalid frequency-dependent window settings")
     fdw = {}
     fdw_reports = []
+    fdw_reference=settings.get('fdw_reference','peak')
+    if fdw_reference not in ['peak','early_lobe']:raise ValueError("Choose peak or early_lobe for the FDW reference")
     if fdw_cycles:
         selection = (f >= fdw_start) & (f <= high * 2) & (f <= min(rate * .45,coverage_high))
         for index, measurement in enumerate(project.measurements):
@@ -252,7 +263,13 @@ def prepare_native_problem(project, tier, settings, *, references=None, progress
                 continue
             if progress:
                 progress(5, f"Frequency-dependent response: {measurement.channel}/{measurement.position}")
-            values, info = frequency_dependent_response(measurement, f[selection], fdw_cycles)
+            reference_sample=None
+            reference_spread=None
+            if fdw_reference=='early_lobe':
+                from .polarity import early_reference
+                reference_sample,reference_spread=early_reference(measurement)
+            values, info = frequency_dependent_response(measurement, f[selection], fdw_cycles,reference_sample=reference_sample)
+            info.update(reference_selection=fdw_reference,reference_threshold_spread_ms=reference_spread)
             fdw[index] = (selection, values)
             fdw_reports.append({"measurement_index": index, **info})
     coefficients = {}
@@ -347,6 +364,7 @@ def evaluate_joint(problem, taps, *, expanded=False):
     weights = defaultdict(list)
     filters = problem.expanded_spectra(taps) if expanded else problem.common_spectra(taps)
     complex_losses = []
+    squared_errors=[]
     for observation, scalar in zip(problem.observations, problem.base_weights):
         predicted = sum(coefficient * filters[output] for output, coefficient in observation.terms)
         selected = observation.frequency_weight > 0
@@ -355,6 +373,7 @@ def evaluate_joint(problem, taps, *, expanded=False):
         error = 20 * np.log10(np.maximum(np.abs(predicted[selected]), 1e-12) / np.maximum(np.abs(target[selected]), 1e-12))
         quadrature = observation.frequency_weight[selected]
         error_sq = float(np.dot(error**2, quadrature) / np.sum(quadrature))
+        squared_errors.append(error_sq)
         key = (observation.source, observation.position)
         values[key].append(error_sq)
         weights[key].append(scalar)
@@ -364,6 +383,7 @@ def evaluate_joint(problem, taps, *, expanded=False):
     return {"rows": rows, "mean_group_rms_db": float(np.mean([r["magnitude_rms_db"] for r in rows])),
             "worst_group_rms_db": max(r["magnitude_rms_db"] for r in rows),
             "normalized_complex_error": float(np.dot(problem.base_weights, complex_losses)),
+            "weighted_magnitude_rms_db":float(np.sqrt(np.dot(problem.base_weights,squared_errors))),
             "level_normalization_after_design": False}
 
 
@@ -463,7 +483,7 @@ def design_native_joint(project, tier, settings, progress=None, *, cancel=None):
     for space in problem.spaces:
         if cancel is not None and cancel.is_set():
             raise InterruptedError("Joint design cancelled while preparing independent reference filters")
-        own_settings={**settings,"phase_mode":"minimum"}
+        own_settings={**settings,"phase_mode":"minimum",'spatial_statistics':'legacy_measurement_median'}
         if space.channel.startswith("SW"):own_settings["low_hz"]=model["subwoofer_correction_band_hz"][0]
         item=design_channel([m for m in train.measurements if m.channel==space.channel],tier,space.channel,own_settings)
         shift=round(model["filter_delay_ms"]*space.sample_rate/1000)
@@ -471,9 +491,18 @@ def design_native_joint(project, tier, settings, progress=None, *, cancel=None):
         baseline.extend(previous);independent_items.append(item)
     baseline=np.asarray(baseline)
     taps, optimization = problem.solve(iterations=int(settings.get("joint_iterations", 60)),
-                                      cg_iterations=int(settings.get("joint_cg_iterations", 100)),
+                                      cg_iterations=int(settings.get("joint_cg_iterations", 150)),
+                                      cg_tolerance=float(settings.get('joint_cg_tolerance',1e-6)),
+                                      over_relaxation=float(settings.get('joint_over_relaxation',1)),
+                                      penalty_adaptation=settings.get('joint_penalty_adaptation','rms'),
                                       rho=float(settings.get("joint_rho", 3)),
                                       lower_bound_method=settings.get("joint_lower_bound_method","supporting_halfplanes"),
+                                      penalty_metric=settings.get('joint_penalty_metric','root_data_diagonal'),
+                                      bound_tolerance_db=float(settings.get('joint_bound_tolerance_db',.15)),
+                                      exact_spatial_risk=settings.get('joint_exact_spatial_risk',True),
+                                      risk_inner_iterations=int(settings.get('joint_risk_inner_iterations',6)),
+                                      risk_inner_tolerance=float(settings.get('joint_risk_inner_tolerance',1e-7)),
+                                      anderson_depth=int(settings.get('joint_anderson_depth',0)),
                                       risk_weight=float(settings.get("position_risk", .35)),
                                       risk_temperature=float(settings.get("risk_temperature", .15)), progress=progress, cancel=cancel,
                                       initial=baseline if realization is None else None)

@@ -29,12 +29,22 @@ The observed HTTPS speaker-settings adapter reads current speaker types, crossov
 
 Click **Read current receiver routing settings** in the joint-design controls to review these values as the offline model's settings. Per-channel crossovers have an explicit checkbox. To search a new global crossover list, disable that checkbox. Loading a value into the offline designer does not change the receiver menu or validate its electrical crossover slopes.
 
-The receiver may enable a subwoofer output with no connected cabinet. Select the physically connected outputs explicitly before capture. Empty capture selection means all receiver-configured outputs. `SWMIX1` through `SWMIX4` retain their original protocol IDs while their measurement names become `SW1` through `SW4`. Configured outputs omitted by the selection are recorded in measurement metadata.
+The receiver may enable a subwoofer output with no connected cabinet. Select the physically connected outputs explicitly before capture. Empty capture selection means all receiver-configured outputs. `SWMIX1` through `SWMIX4` are retained as configured identifiers, while individual sweep/download commands and measurement names use `SW1` through `SW4`. Configured outputs omitted by the selection are recorded in measurement metadata.
 
 Multiple subwoofer jacks, separate distance/trim values and separate measurement IDs do not prove independently writable EQ. Joint multi-subwoofer design requires explicit confirmation of independent control. Native transfer continues to require exact receiver layout coverage and a reviewed plan.
 
 ## Hardware evidence
 
-Read-only native information, exact-IP HEOS model identification and speaker-setting reads were checked on an X3700H. Acoustic capture, filter reconstruction, transfer and after-correction playback measurements remain separate, unverified milestones. Plugging in a microphone does not automatically start tones or calibration.
+Read-only native information, exact-IP HEOS model identification and speaker-setting reads were checked on an X3700H. Float capture transport, including individual subwoofer commands, has also been checked. Microphone compensation, filter reconstruction, transfer and after-correction playback measurements remain unverified. Plugging in a microphone does not automatically start tones or calibration.
 
 References: [official HEOS CLI specification](https://assets.denon.com/documentmaster/us/heos_cli_protocolspecification-version_04062020.pdf) and [Denon X3700H crossover settings](https://manuals.denon.com/AVRX3700H/NA/EN/GFNFSYitmloggd.php).
+
+## Seat priorities and missing data
+
+The saved three-seat row plan starts at 50 percent centre priority and 25 percent per side. Each seat's priority is divided among its measured positions; repeated scans at one point do not multiply it. Native minimum-phase magnitude statistics can use weighted position medians and position-balanced error evaluation. The full joint mode retains every complex observation and applies the same spatial mass to its objective.
+
+The main-seat position is `p0`, left/right seat ear positions are `p1`/`p2`, with optional nearby points `p3` through `p6`. These IDs are assignments, not generated measurements. Missing required seats prevent final row design and transfer preparation. An explicitly provisional calculation may use observed seats, but cannot be prepared as final row calibration. Direct position weights and hierarchical seat priorities are mutually exclusive inputs.
+
+Held-out positions are excluded from both independent and joint fitting. Validation keeps the training level reference and does not renormalize error after design. A held-out point must not be the only training coverage for a required seat.
+
+Saved speaker-setting snapshots can be loaded into the offline model without contacting the receiver. Their origin remains a saved, unrefreshed snapshot; powering off a receiver does not cause automatic reconnection or measurement.

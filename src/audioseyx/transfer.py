@@ -86,6 +86,9 @@ def template_from_receiver(receiver, design):
 
 def prepare_transfer(project, design, template, receiver):
     validate_template(template, allow_settings_only=True)
+    area=design.get('settings',{}).get('listening_area_resolution')
+    if area and not area.get('required_seats_measured'):
+        raise ValueError('A provisional listening-area design with missing measured seats cannot be prepared as final row calibration')
     settings_only = template.get("_source_kind") == "native_settings_snapshot"
     if project.origin == "synthetic":
         raise ValueError('Synthetic demonstration measurements must not be transferred to a real receiver')

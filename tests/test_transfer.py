@@ -54,6 +54,11 @@ class FakeReceiver:
 
 
 class TransferTests(unittest.TestCase):
+    def test_incomplete_listening_area_is_not_prepared_as_final_row_calibration(self):
+        project,design,template,receiver=example()
+        design['settings']['listening_area_resolution']={'required_seats_measured':False,'missing_training_seats':['left','right']}
+        with self.assertRaisesRegex(ValueError,'provisional listening-area'):
+            prepare_transfer(project,design,template,receiver)
     def setUp(self):
         # Artificial test receiver addresses, unrelated to any real AVR model.
         self.address_patch = patch("audioseyx.transfer.load_channel_addresses", return_value={

@@ -92,7 +92,6 @@ def build_server(bench_factory, home, port=0, open_browser=True):
     application = Flask(__name__, static_folder=None)
     application.config.update(MAX_CONTENT_LENGTH=180 * 1024 * 1024, TRUSTED_HOSTS=["127.0.0.1", "localhost"])
     assets = Path(__file__).with_name("web")
-    download_hashes = {}
 
     def reply(data, status=200):
         return Response(json.dumps(data, ensure_ascii=False, allow_nan=False), status=status,
@@ -105,6 +104,8 @@ def build_server(bench_factory, home, port=0, open_browser=True):
             target, name, mime = bench.project_path, "measurements.awb", "application/zip"
         elif path == "/download-analysis":
             target, name, mime = bench.analysis_path, "measurement-analysis.json", "application/json"
+        elif path == "/download-polarity":
+            target,name,mime=bench.polarity_path,"polarity-report.json","application/json"
         elif path == "/download-calibration":
             target = bench.home / "prepared-calibration.oca" if bench.transfer_plan else None
             name = "prepared-calibration.awbcal.json" if bench.template and bench.template.get("_source_kind") == "native_settings_snapshot" else "prepared-calibration.oca"
@@ -113,15 +114,11 @@ def build_server(bench_factory, home, port=0, open_browser=True):
             raise ValueError('Invalid download selection')
         if target is None or not target.is_file():
             raise ValueError('No reviewed result is currently available for download')
-        stat = target.stat()
-        key = (str(target), stat.st_size, stat.st_mtime_ns)
-        digest = download_hashes.get(key)
-        if digest is None:
-            with target.open("rb") as stream:
-                digest = hashlib.file_digest(stream, "sha256").hexdigest()
-            if len(download_hashes) > 64:
-                download_hashes.clear()
-            download_hashes[key] = digest
+        # Mutable calibration aliases can retain size/timestamps. Their byte
+        # identity must be checked, not inferred from cached filesystem data.
+        with target.open('rb') as stream:
+            stat=os.fstat(stream.fileno())
+            digest=hashlib.file_digest(stream,'sha256').hexdigest()
         return target, {"url": path, "filename": name, "mime": mime, "bytes": stat.st_size, "sha256": digest}
 
     @application.after_request
@@ -155,14 +152,14 @@ def build_server(bench_factory, home, port=0, open_browser=True):
                 return reply(bench.rew.measurement_controls())
             if path == "/api/download-info":
                 return reply(download_info(request.args.get("path", ""))[1])
-            if path in ["/download", "/download-project", "/download-analysis", "/download-calibration"]:
+            if path in ["/download", "/download-project", "/download-analysis", "/download-calibration", "/download-polarity"]:
                 target, info = download_info(path)
                 expected = request.headers.get("If-Match")
                 if expected and expected != '"' + info["sha256"] + '"':
                     return reply({"error": 'The download changed; restart the download'}, 412)
                 return send_file(target, mimetype=info["mime"], as_attachment=True, download_name=info["filename"],
                                  conditional=True, etag=info["sha256"])
-            asset = {"/": "index.html", "/app.js": "app.js", "/analysis.js": "analysis.js", "/downloads.js": "downloads.js", "/joint.js": "joint.js", "/layouts.js":"layouts.js", "/style.css": "style.css"}.get(path)
+            asset = {"/": "index.html", "/app.js": "app.js", "/analysis.js": "analysis.js", "/downloads.js": "downloads.js", "/joint.js": "joint.js", "/layouts.js":"layouts.js", "/polarity.js":"polarity.js", "/style.css": "style.css"}.get(path)
             if asset is None:
                 return reply({"error": 'Page not found'}, 404)
             content = (assets / asset).read_bytes()
@@ -219,12 +216,13 @@ def build_server(bench_factory, home, port=0, open_browser=True):
         elif path == "/api/design/receiver-settings":
             from .receiver_web import joint_design_defaults
             from .layouts import configured_channels
-            if not bench.receiver or not bench.receiver.get("connected"):
-                raise ValueError("Connect the receiver and read its settings first")
-            settings=bench.receiver.get("web_settings",{})
+            live=bool(bench.receiver and bench.receiver.get('connected'))
+            saved=bench.project.metadata.get('receiver_settings_snapshot',{}) if bench.project else {}
+            settings=bench.receiver.get('web_settings',{}) if live else saved
             if not settings.get("available"):
-                raise ValueError("The receiver's current web speaker settings are unavailable")
-            result=joint_design_defaults(settings,bench.project.channels if bench.project else configured_channels(bench.receiver["status"]))
+                raise ValueError("No connected receiver settings or saved speaker-settings snapshot is available")
+            result=joint_design_defaults(settings,bench.project.channels if bench.project else configured_channels(bench.receiver['status']))
+            result['receiver_settings_reference']['source']='live_read_only_snapshot' if live else 'offline_saved_snapshot_not_refreshed'
         elif path == "/api/target-curve":
             result = bench.set_curve(body)
         elif path == "/api/self-test":
@@ -238,6 +236,18 @@ def build_server(bench_factory, home, port=0, open_browser=True):
             result = bench.compare(body)
         elif path == "/api/analyze":
             result = bench.analyze(body)
+        elif path == "/api/polarity":
+            result = bench.analyze_polarity(body)
+        elif path == '/api/listening-area':
+            from .listening_area import three_seat_row_plan
+            if not bench.project:raise ValueError('Import or capture measurements first')
+            if body.get('preset')!='three_seat_row':raise ValueError('Select a supported listening-area preset')
+            priority=float(body.get('centre_priority',.5))
+            if not .01<=priority<=.98:raise ValueError('Centre-seat priority must be 1-98 percent')
+            plan=three_seat_row_plan()
+            for seat in plan['seats']:seat['weight']=priority if seat['id']=='centre' else (1-priority)/2
+            bench.project.metadata['listening_area']=plan
+            result=bench.set_project(bench.project)
         elif path == "/api/room-modes":
             from .analysis import room_modes
             result = room_modes(body["length"], body["width"], body["height"], body.get("high_hz", 200))

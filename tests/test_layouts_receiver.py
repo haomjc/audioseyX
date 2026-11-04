@@ -16,6 +16,10 @@ from test_native_measure import MeasurementReceiver
 
 
 class VariableLayoutTests(unittest.TestCase):
+    def test_legacy_native_swmix_capture_cannot_silently_enter_filter_design(self):
+        project=Project('legacy alias',[Measurement('SW1','p0','unverified',ir=[0,1,0],metadata={'receiver_raw_channel_id':'SWMIX1'})],'native_avr')
+        self.assertEqual(project.summary()['unsafe_capture_indices'],[0])
+        with self.assertRaisesRegex(ValueError,'SWMIX'):design_project(project,'XT32',{})
     def test_mismatched_measurement_rate_uses_full_record_transform_with_original_time(self):
         ir=np.zeros(1800);ir[270]=1;ir[1760]=.2
         measurement=Measurement("FL","p0","different rate",44100,ir,start_time_s=-.001)
@@ -144,7 +148,10 @@ class ReadOnlyReceiverSettingsTests(unittest.TestCase):
         self.assertEqual(sub.metadata["receiver_raw_channel_id"],"SWMIX1")
         self.assertIn("SWMIX2",sub.metadata["configured_outputs_not_selected"])
         started=[json.loads(payload)["Channel"] for command,payload in device.commands if command=="START_CHNL"]
-        self.assertEqual(started,["FL","SWMIX1"])
+        self.assertEqual(started,["FL","SW1"])
+        self.assertEqual(sub.metadata["receiver_measurement_command_id"],"SW1")
+        position=next(json.loads(payload) for command,payload in device.commands if command=="SET_POSNUM")
+        self.assertEqual(position["ChSetup"],["FL","SW1"])
         with self.assertRaises(ValueError):select_capture_outputs(receiver["status"],["UNKNOWN"])
 
 
