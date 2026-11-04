@@ -5,6 +5,9 @@ __pycache__/
 .env
 .pypirc
 .private/
+.native-profiles/
+*.npz
+*.npy
 build/
 dist/
 .build/

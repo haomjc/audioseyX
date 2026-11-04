@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ipaddress
+import codecs
 import json
 import socket
 import time
@@ -9,9 +10,11 @@ from urllib.request import build_opener, ProxyHandler
 import xml.etree.ElementTree as ET
 
 from .native import frame, parse_frame
+from .layouts import configured_channels, summarize_layout
 
 
 def private_host(host):
+    if not isinstance(host,str):raise ValueError("Enter the receiver's LAN IP address")
     try:
         address = ipaddress.ip_address(host)
     except ValueError as error:
@@ -23,11 +26,18 @@ def private_host(host):
 
 class ReceiverClient:
     def __init__(self, host, port=1256, timeout=4):
-        self.host = private_host(host)
+        self.web_url=None
+        if isinstance(host,str) and "://" in host:
+            parsed=urlparse(host)
+            if parsed.scheme not in ["http","https"] or parsed.username or parsed.password:
+                raise ValueError("Use a receiver LAN IP or an HTTP(S) receiver URL without credentials")
+            self.host=private_host(parsed.hostname)
+            self.web_url=f"{parsed.scheme}://{parsed.netloc}"
+        else:self.host = private_host(host)
         self.port = port
         self.timeout = timeout
 
-    def read_info(self):
+    def read_info(self,include_settings=False):
         result = {"host": self.host, "read_only": True}
         try:
             with socket.create_connection((self.host, self.port), self.timeout) as connection:
@@ -60,6 +70,15 @@ class ReceiverClient:
                     if key not in result:
                         raise ValueError('No receiver response for ' + command)
             result["connected"] = True
+            result["native_information_read_verified"]=True
+            result["configured_layout"]=summarize_layout(configured_channels(result["status"]))
+            if not any(k.casefold() in ["model", "modelname", "targetmodelname"] for k in result["info"]):
+                try:
+                    identity=read_heos_identity(self.host,min(self.timeout,3))
+                    if identity:
+                        result["info"].update(Model=identity["model"],ModelSource="heos_matching_ip",
+                                              HEOSFirmwareVersion=identity.get("version"))
+                except (OSError,ValueError):pass
             if not any(k.casefold() in ["model", "modelname", "targetmodelname"] for k in result["info"]):
                 for port, endpoint in [(8080, "/description.xml"), (80, "/description.xml")]:
                     try:
@@ -72,9 +91,43 @@ class ReceiverClient:
                             break
                     except (OSError, ValueError, ET.ParseError):
                         continue
+            if include_settings:
+                from .receiver_web import read_speaker_settings
+                try:result["web_settings"]=read_speaker_settings(self.host,result["status"],self.web_url)
+                except (OSError,ValueError) as error:result["web_settings"]={"available":False,"error":str(error),"read_only":True}
         except (OSError, ValueError) as error:
             result.update({"connected": False, "error": str(error)})
         return result
+
+
+def read_heos_identity(host,timeout=3):
+    """Official read-only get_players; select only the exact requested IP."""
+    host=private_host(host)
+    buffer="";decoder=json.JSONDecoder();utf8=codecs.getincrementaldecoder("utf-8")();deadline=time.monotonic()+timeout
+    with socket.create_connection((host,1255),timeout) as connection:
+        connection.settimeout(min(.5,timeout))
+        connection.sendall(b"heos://player/get_players\r\n")
+        while time.monotonic()<deadline:
+            try:chunk=connection.recv(65536)
+            except socket.timeout:continue
+            if not chunk:break
+            buffer+=utf8.decode(chunk)
+            if len(buffer)>262144:raise ValueError("HEOS identity response is too large")
+            while buffer.strip():
+                buffer=buffer.lstrip()
+                try:document,used=decoder.raw_decode(buffer)
+                except ValueError:break
+                buffer=buffer[used:]
+                if not isinstance(document,dict):raise ValueError("Invalid HEOS identity document")
+                header=document.get("heos",{})
+                if header.get("command")!="player/get_players" or header.get("result")!="success":continue
+                matches=[p for p in document.get("payload",[]) if p.get("ip")==host]
+                if len(matches)!=1:return None
+                player=matches[0]
+                if not isinstance(player.get("model"),str) or not 1<=len(player["model"])<=128:
+                    raise ValueError("Invalid HEOS model identity")
+                return {"model":player["model"],"version":player.get("version")}
+    return None
 
 
 def discover(timeout=2.5):

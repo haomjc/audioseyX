@@ -53,4 +53,4 @@ where = ["src"]
 audioseyx = ["synthetic_hashes.json", "web/*.html", "web/*.css", "web/*.js"]
 
 [tool.setuptools.exclude-package-data]
-"*" = ["native_tables.json", "channel_addresses.json", "*.exe", "*.ady", "*.oca", "*.awb", "*.log"]
+"*" = ["native_tables.json", "channel_addresses.json", "*.exe", "*.ady", "*.oca", "*.awb", "*.npz", "*.npy", "*.log"]

@@ -143,6 +143,10 @@ def build_server(bench_factory, home, port=0, open_browser=True):
         if request.method == "GET":
             if path == "/api/state":
                 return reply({**bench.state(), "transfer": bench.transfer_state()})
+            if path == "/api/layouts":
+                from .layouts import presets
+                from .model import CHANNELS
+                return reply({"presets":presets(),"known_channels":list(CHANNELS),"presets_certify_receiver_support":False})
             if path == "/api/environment":
                 return reply({"rew": find_rew(), "rew_api": bench.rew.status()})
             if path == "/api/rew/status":
@@ -158,7 +162,7 @@ def build_server(bench_factory, home, port=0, open_browser=True):
                     return reply({"error": 'The download changed; restart the download'}, 412)
                 return send_file(target, mimetype=info["mime"], as_attachment=True, download_name=info["filename"],
                                  conditional=True, etag=info["sha256"])
-            asset = {"/": "index.html", "/app.js": "app.js", "/analysis.js": "analysis.js", "/downloads.js": "downloads.js", "/style.css": "style.css"}.get(path)
+            asset = {"/": "index.html", "/app.js": "app.js", "/analysis.js": "analysis.js", "/downloads.js": "downloads.js", "/joint.js": "joint.js", "/layouts.js":"layouts.js", "/style.css": "style.css"}.get(path)
             if asset is None:
                 return reply({"error": 'Page not found'}, 404)
             content = (assets / asset).read_bytes()
@@ -174,7 +178,7 @@ def build_server(bench_factory, home, port=0, open_browser=True):
             return reply({"error": 'Requests from other origins are rejected'}, 403)
         body = request.get_json() or {}
         if path == "/api/demo":
-            result = bench.set_project(demo_project())
+            result = bench.set_project(demo_project(body.get("layout"),body.get("positions",3)))
         elif path == "/api/import":
             result = bench.upload(body)
         elif path == "/api/mapping":
@@ -198,11 +202,29 @@ def build_server(bench_factory, home, port=0, open_browser=True):
         elif path == "/api/receiver/connect":
             if bench.job["status"] == "running" and bench.job.get("kind") in ["native_measure", "transfer"]:
                 raise ValueError('Receiver calibration communication is active; reconnecting is temporarily unavailable')
-            result = ReceiverClient(body["host"]).read_info()
+            result = ReceiverClient(body["host"]).read_info(include_settings=True)
+            if result.get("connected") and body.get("capture_channels") is not None:
+                from .native_measure import select_capture_outputs
+                from .model import ALIASES
+                from .layouts import summarize_layout
+                selected=select_capture_outputs(result["status"],body["capture_channels"])
+                result["capture_channels"]=[ALIASES.get(name,name) for name in selected]
+                result["declared_physical_layout"]=summarize_layout(result["capture_channels"])
             bench.receiver = result
             bench.log('Read-only receiver check: ' + ('connected' if result["connected"] else 'not connected'))
         elif path == "/api/design":
             result = bench.start_design(body)
+        elif path == "/api/design/cancel":
+            result = bench.cancel_design()
+        elif path == "/api/design/receiver-settings":
+            from .receiver_web import joint_design_defaults
+            from .layouts import configured_channels
+            if not bench.receiver or not bench.receiver.get("connected"):
+                raise ValueError("Connect the receiver and read its settings first")
+            settings=bench.receiver.get("web_settings",{})
+            if not settings.get("available"):
+                raise ValueError("The receiver's current web speaker settings are unavailable")
+            result=joint_design_defaults(settings,bench.project.channels if bench.project else configured_channels(bench.receiver["status"]))
         elif path == "/api/target-curve":
             result = bench.set_curve(body)
         elif path == "/api/self-test":

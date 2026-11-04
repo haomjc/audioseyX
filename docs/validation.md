@@ -19,7 +19,7 @@ The benchmark has no microphone, ADC, clock drift, amplifier nonlinearities or p
 
 ## Current receiver status
 
-There is no physically validated model in this public prerelease. The X3700H 7.1.4 setup is the initial research target. Stock Float capture and native transfer remain experimental. Fixed capture, native reconstruction at every sample-rate slot, microphone compensation, multi-subwoofer optimization and incremental composition with stock correction remain open work.
+Read-only native information, exact-IP HEOS model identification and current speaker-setting reads have been checked on an X3700H. There is no fully validated acoustic correction path in this public prerelease. Stock Float capture and native transfer remain experimental. Fixed capture, native reconstruction at every sample-rate slot, microphone compensation, physical multi-subwoofer validation and incremental composition with stock correction remain open work. Offline joint optimization supports explicitly confirmed independent subwoofer outputs; that computational support is not physical receiver certification.
 
 Hardware reports should state the exact model, firmware, tier, layout, microphone, timing method and operation tested. Discovery, capture, transfer acknowledgement and normal-playback acoustic verification are different milestones.
 
@@ -28,6 +28,7 @@ Hardware reports should state the exact model, firmware, tier, layout, microphon
 ```console
 python -m unittest discover -s tests -v
 audioseyx --self-test --report self-test.json
+audioseyx --joint-benchmark --report joint-benchmark.json
 python -m sphinx -W --keep-going -b html docs docs/_build/html
 python -m build
 python tools/audit_distribution.py dist

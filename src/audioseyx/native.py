@@ -53,8 +53,22 @@ def compile_channel(item, tier):
     taps = np.asarray(item["taps"], dtype=float)
     if len(taps) != length or item["sample_rate"] != fs or not np.isfinite(taps).all():
         raise ValueError('The filter does not match the device format')
-    coefficients = pack_xt32(taps, item["channel"].startswith("SW")) if tier == "XT32" else taps.copy()
-    return {"channel": item["channel"], "codec": cap.codec, "design_rate": fs,
+    supplied = item.get("_native_parameters")
+    if supplied is not None:
+        supplied = np.asarray(supplied,dtype=float)
+        base = np.asarray(item.get("_native_parameter_taps",[]),dtype=float)
+        if supplied.shape != (packed_length,) or base.shape != taps.shape or not np.isfinite(supplied).all() or not np.any(base):
+            raise ValueError("Supplied native parameters do not match this channel budget")
+        pivot = int(np.argmax(np.abs(base)))
+        scale = taps[pivot] / base[pivot]
+        if not np.isfinite(scale) or not np.allclose(taps,base*scale,rtol=1e-8,atol=1e-10):
+            raise ValueError("The FIR changed after native-parameter optimization; its native encoding is stale")
+        coefficients = supplied * scale
+        if not np.isfinite(coefficients).all():
+            raise ValueError("Supplied native coefficients overflow after gain scaling")
+    else:
+        coefficients = pack_xt32(taps, item["channel"].startswith("SW")) if tier == "XT32" else taps.copy()
+    return {"channel": item["channel"], "codec": "supplied_native_synthesis" if supplied is not None else cap.codec, "design_rate": fs,
             "design_length": length, "coefficient_count": len(coefficients),
             "coefficients": coefficients, "hardware_verified": False}
 

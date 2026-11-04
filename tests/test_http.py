@@ -2,6 +2,8 @@ import json
 import re
 import tempfile
 import threading
+import time
+from unittest.mock import patch
 import unittest
 from pathlib import Path
 import hashlib
@@ -55,6 +57,60 @@ class HttpWorkflowTests(unittest.TestCase):
         with self.request("/api/state") as response:
             state = json.load(response)
         self.assertIn("transfer", state)
+        with self.request("/joint.js") as response:
+            self.assertIn(b"renderJointEvaluation",response.read())
+        with self.request("/layouts.js") as response:
+            self.assertIn(b"renderReceiverLayout",response.read())
+
+    def test_layout_api_and_custom_demo_do_not_require_a_fixed_channel_count(self):
+        with self.request("/api/layouts") as response:layouts=json.load(response)
+        self.assertIn("9.4.6",[item["id"] for item in layouts["presets"]])
+        self.assertIn("SB",layouts["known_channels"])
+        with self.request("/api/demo",{"layout":["FL","FR","FHL","FHR","SW1","SW2"],"positions":1},self.bench.token) as response:
+            project=json.load(response)
+        self.assertEqual(project["layout"]["signature"],"2.2.2")
+        self.assertEqual(project["measurement_count"],6)
+        self.assertEqual(project["origin"],"synthetic")
+
+    def wait_design(self):
+        deadline=time.monotonic()+10
+        while self.bench.job["status"]=="running" and time.monotonic()<deadline:
+            time.sleep(.01)
+        self.assertNotEqual(self.bench.job["status"],"running")
+
+    def test_joint_design_finishes_with_serializable_routed_results_and_download(self):
+        rows=[Measurement(channel,"p0",channel,ir=[0,0,1,0,0,0]) for channel in ["FL","SW1"]]
+        self.bench.set_project(Project("HTTP joint fixture",rows,"synthetic"))
+        settings={"optimizer":"native_joint","joint_iterations":10,"joint_delay_ms":0,"timing_confirmed":True,
+                  "relative_levels_confirmed":True,"routing_measurements_confirmed":True,"bass_db":0,"tilt_db_oct":0}
+        with self.request("/api/design",settings,self.bench.token) as response:
+            self.assertIn(json.load(response)["status"],["running","complete"])
+        self.wait_design()
+        self.assertEqual(self.bench.job["status"],"complete",self.bench.job)
+        with self.request("/api/state") as response:
+            state=json.load(response)
+        self.assertEqual([item["channel"] for item in state["design"]["routed_charts"]],["FL","LFE"])
+        self.assertEqual(state["joint"]["kind"],"full_joint_fir")
+        self.assertFalse(state["design"]["receiver_upload_ready"])
+        with self.request("/download") as response:
+            self.assertTrue(response.read().startswith(b"PK"))
+
+    def test_design_cancel_does_not_activate_a_partial_result(self):
+        self.bench.set_project(Project("cancel fixture",[Measurement("FL","p0","m",ir=[1,0,0])],"synthetic"))
+        started=threading.Event()
+        def wait_for_cancel(*args,**kwargs):
+            started.set()
+            if kwargs["cancel"].wait(5):raise InterruptedError("Filter design cancelled")
+            raise RuntimeError("Test cancellation was not delivered")
+        with patch("audioseyx.app.design_project",side_effect=wait_for_cancel):
+            with self.request("/api/design",{},self.bench.token) as response:response.read()
+            self.assertTrue(started.wait(3))
+            with self.request("/api/design/cancel",{},self.bench.token) as response:
+                self.assertTrue(json.load(response)["cancel_requested"])
+            self.wait_design()
+        self.assertEqual(self.bench.job["status"],"cancelled")
+        self.assertIsNone(self.bench.design)
+        self.assertIsNone(self.bench.export_path)
 
     def test_writes_require_local_session_token_and_origin(self):
         for token, origin in [(None, None), (self.bench.token, "https://example.com")]:

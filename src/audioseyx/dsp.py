@@ -156,6 +156,7 @@ def design_channel(measurements, tier, channel, settings):
     metrics["deep_null_boost_protection_fraction"] = float(np.mean(depth_trust[evaluation] < .5))
     metrics["effective_correction_band_hz"] = [low, high]
     metrics["common_measurement_band_hz"] = [covered_low, covered_high]
+    metrics["reference_level_db"] = reference
     if np.any((depth_trust < .5) & (wanted > 0) & (weights > .5)):
         limitations.append('Boost is reduced in deep nulls or substantial roll-off. This conservative gain protection does not identify the physical cause of the dip.')
     return {"channel": channel, "sample_rate": fs, "design_length": length, "packed_length": packed,
@@ -165,7 +166,7 @@ def design_channel(measurements, tier, channel, settings):
                       "target": np.interp(grid, frequencies, robust * (1 - weights) + target * weights).tolist()}}
 
 
-def design_project(project, tier, settings, progress=None):
+def design_project(project, tier, settings, progress=None, *, cancel=None):
     numeric = ["low_hz", "high_hz", "sub_high_hz", "phase_high_hz", "delay_ms", "max_boost_db", "max_cut_db", "bass_db", "tilt_db_oct", "crossover_hz", "smoothing_octave"]
     for key in numeric:
         if key in settings and not np.isfinite(float(settings[key])):
@@ -179,8 +180,16 @@ def design_project(project, tier, settings, progress=None):
     unknown = [channel for channel in project.channels if channel not in CHANNELS]
     if unknown:
         raise ValueError('Check channel mappings in the measurement list first: ' + ", ".join(unknown))
+    optimizer = settings.get("optimizer", "independent")
+    if optimizer not in ["independent", "native_joint"]:
+        raise ValueError("Unknown filter-design optimizer")
+    if optimizer == "native_joint":
+        from .native_joint import design_native_joint
+        return design_native_joint(project, tier, settings, progress, cancel=cancel)
     output = []
     for index, channel in enumerate(project.channels):
+        if cancel is not None and cancel.is_set():
+            raise InterruptedError("Filter design cancelled")
         group = [m for m in project.measurements if m.channel == channel]
         output.append(design_channel(group, tier, channel, settings))
         if progress:
@@ -229,20 +238,25 @@ def joint_sub_alignment(project, designs, crossover=80.0):
             "notice": 'A common alignment suggestion using the stated crossover model. It is not written into the filters; the actual bass-management path must be checked.'}
 
 
-def demo_project():
+def demo_project(layout=None,positions=3):
+    from .layouts import preset_channels, validate_channels, summarize_layout
+    channels=(preset_channels(layout) if isinstance(layout,str) else validate_channels(layout)) if layout is not None else ["FL", "FR", "C", "SLA", "SRA", "SBL", "SBR", "TFL", "TFR", "TRL", "TRR", "SW1"]
+    if isinstance(positions,bool) or not isinstance(positions,int) or not 1<=positions<=20:
+        raise ValueError("Demo positions must be an integer from 1 to 20")
     fs = 48000
     rows = []
-    for c, channel in enumerate(["FL", "FR", "C", "SLA", "SRA", "SBL", "SBR", "TFL", "TFR", "TRL", "TRR", "SW1"]):
-        for position in range(3):
+    for c, channel in enumerate(channels):
+        for position in range(positions):
             ir = np.zeros(16384)
             arrival = 170 + c * 7 + position * 4
-            ir[arrival] = 0.8 if channel != "SW1" else 0.6
+            ir[arrival] = 0.6 if channel.startswith("SW") else 0.8
             ir[arrival + 530 + position * 9] = 0.32
             ir[arrival + 1220] = -0.15
             time = np.arange(len(ir) - arrival) / fs
             ir[arrival:] += 0.006 * np.exp(-time / (0.07 + 0.008 * position)) * np.sin(2 * np.pi * (57 + c * 1.3) * time)
-            if channel == "SW1":
+            if channel.startswith("SW"):
                 ir = signal.sosfilt(signal.butter(4, 200, fs=fs, output="sos"), ir)
             rows.append(Measurement(channel, f"p{position}", f"{channel} / position {position + 1}", fs, ir, timing_reference="synthetic_common"))
-    return Project('7.1.4 synthetic demo', rows, "synthetic", "AVR-X3700H", "XT32", {"timing_confirmed": True},
+    signature=summarize_layout(channels)["signature"]
+    return Project(signature+' synthetic demo', rows, "synthetic", "AVR-X3700H" if layout is None else "SYNTHETIC-LAYOUT", "XT32", {"timing_confirmed": True},
                    ['Artificial demonstration data for functional checks only. They must not be uploaded as real room calibration.'])

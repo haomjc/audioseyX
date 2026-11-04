@@ -13,7 +13,7 @@ import numpy as np
 
 from . import __version__
 from .dsp import demo_project, design_project, joint_sub_alignment, spectrum
-from .model import CHANNELS
+from .model import CHANNELS, ALIASES
 from .importers import import_file, save_project
 from .exporter import export_bundle
 from .rew import RewClient, find_rew, launch_rew
@@ -34,7 +34,7 @@ def public_design(design):
     if not design:
         return None
     return {**{k: v for k, v in design.items() if k != "channels"},
-            "channels": [{k: v for k, v in item.items() if k != "taps"} for item in design["channels"]]}
+            "channels": [{k: v for k, v in item.items() if k != "taps" and not k.startswith("_")} for item in design["channels"]]}
 
 
 class Workbench:
@@ -57,6 +57,7 @@ class Workbench:
         self.template = None
         self.transfer_plan = None
         self.capture_cancel = threading.Event()
+        self.design_cancel = threading.Event()
         self.target_curve = None
         self.log('Workbench started. No receiver has been connected or modified.')
         curve_file = self.home / "target-curve.json"
@@ -89,6 +90,8 @@ class Workbench:
 
     def state(self):
         return {"application_id": "audioseyx-workbench", "version": __version__, "compatibility": compatibility_status(),
+                "features":{"full_complex_joint_fir":True,"native_synthesis_models":True,"per_frequency_fdw":True,
+                            "variable_channel_layouts":True,"read_only_receiver_settings":True},
                 "project": self.project.summary() if self.project else None,
                 "design": public_design(self.design), "joint": self.joint, "job": dict(self.job),
                 "receiver": self.receiver, "events": self.events[-15:],
@@ -158,27 +161,44 @@ class Workbench:
             self.design = None
             self.joint = None
             self.export_path = None
-            self.job = {"status": "running", "progress": 0, "message": 'Preparing measurements and device formats'}
+            self.design_cancel = threading.Event()
+            self.job = {"status": "running", "kind":"design", "progress": 0, "message": 'Preparing measurements and device formats'}
         def progress(number, message):
             self.job.update({"progress": number, "message": message})
         def run():
             try:
                 settings["timing_confirmed"] = settings.get("timing_confirmed") is True
                 project.metadata["timing_confirmed"] = settings["timing_confirmed"]
-                design = design_project(project, settings.get("tier", project.tier or "XT32"), settings, progress)
+                design = design_project(project, settings.get("tier", project.tier or "XT32"), settings, progress, cancel=self.design_cancel)
+                if self.design_cancel.is_set():
+                    raise InterruptedError("Filter design cancelled")
                 progress(90, 'Evaluating shared-subwoofer alignment')
-                joint = joint_sub_alignment(project, design, float(settings.get("crossover_hz", 80)))
+                joint = ({"available":True,"kind":"full_joint_fir","optimization":design["joint_optimization"],
+                          "evaluation":design["joint_evaluation"],"model":design["joint_model"]}
+                         if design.get("joint_model") else joint_sub_alignment(project, design, float(settings.get("crossover_hz", 80))))
                 progress(95, 'Compiling candidate formats and exporting reports')
                 path = export_bundle(project, design, self.home / "exports" / (project.id + "-" + str(time.time_ns())), joint)
                 with self.lock:
+                    if self.design_cancel.is_set():
+                        raise InterruptedError("Filter design cancelled; no result was activated")
                     self.design, self.joint, self.export_path = design, joint, path
                     self.job = {"status": "complete", "progress": 100, "message": 'Design and export complete'}
                 self.log('Completed channel designs, available candidate encoding and reports. Nothing has been written to the receiver.')
+            except InterruptedError as error:
+                self.job={"status":"cancelled","kind":"design","progress":0,"message":str(error)}
+                self.log(str(error))
             except Exception as error:
                 self.job = {"status": "failed", "progress": 0, "message": str(error)}
                 self.log('Design incomplete: ' + str(error))
         threading.Thread(target=run, daemon=True).start()
         return dict(self.job)
+
+    def cancel_design(self):
+        with self.lock:
+            if self.job.get("status")!="running" or self.job.get("kind")!="design":
+                raise ValueError("No filter-design job is running")
+            self.design_cancel.set()
+        return {"cancel_requested":True}
 
     def set_curve(self, body):
         if self.job["status"] == "running":
@@ -205,6 +225,9 @@ class Workbench:
         if body.get("ready") is not True:
             raise ValueError('Confirm that the stock microphone is connected to the AVR and that calibration test tones may play')
         position, repeats = int(body.get("position", 1)), int(body.get("repeats", 1))
+        from .native_measure import select_capture_outputs
+        selected_outputs=select_capture_outputs(self.receiver["status"],body.get("channels"))
+        selected_channels=[ALIASES.get(name,name) for name in selected_outputs]
         if not 1 <= position <= 20 or not 1 <= repeats <= 5:
             raise ValueError('Position must be 1-20 and repeats must be 1-5')
         with self.lock:
@@ -229,7 +252,7 @@ class Workbench:
                     snapshot = Project('Stock microphone capture checkpoint', rows.copy(), "native_avr",
                                        metadata={"receiver_host": host, "partial": True})
                     save_project(snapshot, self.home / f"native-position-{position}-checkpoint.json")
-                capture_position(fresh, position, repeats, self.capture_cancel, progress, checkpoint)
+                capture_position(fresh, position, repeats, self.capture_cancel, progress, checkpoint,channels=selected_channels)
             except Exception as error:
                 failure = str(error)
             if rows:
@@ -370,7 +393,10 @@ def main():
     parser.add_argument("--port", type=int, default=0)
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--data-dir", default=None)
-    parser.add_argument("--self-test", action="store_true")
+    checks=parser.add_mutually_exclusive_group()
+    checks.add_argument("--self-test", action="store_true")
+    checks.add_argument("--joint-benchmark",action="store_true",help="Run the full synthetic XT32 7.1.4 joint-FIR benchmark without connecting to a receiver")
+    parser.add_argument("--benchmark-iterations",type=int,default=60)
     parser.add_argument("--report", default=None)
     args = parser.parse_args()
     if args.compat_dir:
@@ -378,9 +404,13 @@ def main():
     if args.compat_status:
         print(json.dumps(compatibility_status(), ensure_ascii=False, indent=2), flush=True)
         return
-    if args.self_test:
-        from .diagnostics import self_test
-        report = self_test()
+    if args.self_test or args.joint_benchmark:
+        if args.joint_benchmark:
+            from .joint_benchmarks import run_joint_benchmarks
+            report=run_joint_benchmarks(args.benchmark_iterations,lambda number,message:print(f"{number}% {message}",file=sys.stderr,flush=True))
+        else:
+            from .diagnostics import self_test
+            report = self_test()
         encoded = json.dumps(report, ensure_ascii=False, indent=2)
         if args.report:
             Path(args.report).write_text(encoded, encoding="utf-8")

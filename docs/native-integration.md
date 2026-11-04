@@ -26,6 +26,8 @@ audioseyx --compat-dir /path/to/local-data
 
 ## Experimental transfer
 
+Read-only native information, exact-IP HEOS model identification and current speaker-setting reads have been checked on an X3700H. The [layout guide](layouts.md) describes variable layouts, output selection and the HTTPS settings adapter. This is distinct from acoustic capture or successful DSP reconstruction.
+
 Transfer uses the observed calibration coefficient interface, not firmware flashing. A plan checks the reported model, tier, numeric format, full channel coverage, microphone state and gain budget. Synthetic measurements are rejected; limited mixed-phase designs are export-only.
 
 A complete imported OCA retains an original-filter recovery copy. A settings-only snapshot has no old filters and may require rerunning stock calibration for recovery. The experimental transfer replaces both calibration curves and disables Dynamic EQ and Dynamic Volume while preserving existing crossover, distance and amplifier-assignment settings.

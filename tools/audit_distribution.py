@@ -8,11 +8,11 @@ import tarfile
 import zipfile
 
 FORBIDDEN_NAMES = {"native_tables.json", "channel_addresses.json", "native-codec-goldens.json", ".env", ".pypirc"}
-FORBIDDEN_PARTS = {".git", ".private", "UserData", "用户数据", "__pycache__"}
-FORBIDDEN_SUFFIXES = {".exe", ".ady", ".oca", ".awb", ".log", ".pyc"}
+FORBIDDEN_PARTS = {".git", ".private", ".native-profiles", "UserData", "用户数据", "__pycache__"}
+FORBIDDEN_SUFFIXES = {".exe", ".ady", ".oca", ".awb", ".npz", ".npy", ".log", ".pyc"}
 WHEEL_REQUIRED = {"audioseyx/__init__.py", "audioseyx/__main__.py", "audioseyx/synthetic_hashes.json",
                   "audioseyx/web/index.html", "audioseyx/web/app.js", "audioseyx/web/analysis.js",
-                  "audioseyx/web/downloads.js", "audioseyx/web/style.css"}
+                  "audioseyx/web/downloads.js", "audioseyx/web/joint.js", "audioseyx/web/layouts.js", "audioseyx/web/style.css"}
 
 
 def check_names(names):

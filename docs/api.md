@@ -40,6 +40,11 @@ The pure-delay example has a peak time of 4 ms after accounting for the original
 | `dsp` | `design_project(project, tier, settings)` | Offline filter design |
 | `exporter` | `export_bundle(project, design, directory)` | Filter WAVs, measurements and reports |
 | `benchmarks` | `run_benchmarks()` | Fixed-ground-truth numerical cases |
+| `joint_benchmarks` | `run_joint_benchmarks(iterations=60)` | Full synthetic 7.1.4 joint-FIR validation |
+| `native_joint` | `prepare_native_problem(project, tier, settings)` | Complete complex native-routing observations |
+| `joint_fir` | `JointFIRProblem(spaces, observations, nfft)` | Full-tap/custom-routing solver with sparse native synthesis |
+| `measurement_quality` | `frequency_dependent_response(measurement, frequencies, cycles)` | Per-frequency Gaussian windowing |
+| `realization` | `load_realization(path, tier, model)` | Validate explicitly supplied native synthesis data |
 | `compat` | `compatibility_status()` | Local optional-resource availability |
 
 ## Local web API
@@ -52,7 +57,10 @@ The web API is an implementation detail of the desktop workflow. It binds to loo
 audioseyx [--port PORT] [--no-browser] [--data-dir DIRECTORY]
 audioseyx --version
 audioseyx --self-test [--report FILE]
+audioseyx --joint-benchmark [--benchmark-iterations 60] [--report FILE]
 audioseyx --compat-status [--compat-dir DIRECTORY]
 ```
 
-Self-test and compatibility-status commands do not connect to a receiver or play sound.
+Self-test, joint-benchmark and compatibility-status commands do not connect to a receiver or play sound. The joint benchmark is substantially more expensive than the small self-test and reports convergence separately from feasible-filter assertions.
+
+`tools/readthedocs.py` is a repository maintenance script for the official Read the Docs API, separate from the local desktop web API. See [release maintenance](releasing.md).

@@ -33,7 +33,7 @@ def export_bundle(project, design, directory, joint=None):
             raise ValueError('The channel name cannot be used as an export filename')
         wavfile.write(directory / (channel + "-filter.wav"), item["sample_rate"], item["taps"].astype(np.float32))
         native["channels"].append({key: value.tolist() if isinstance(value, np.ndarray) else value for key, value in compiled.items()})
-        report["channels"].append({key: value for key, value in item.items() if key != "taps"})
+        report["channels"].append({key: value for key, value in item.items() if key != "taps" and not key.startswith("_")})
     (directory / "design-report.json").write_text(json.dumps(report, ensure_ascii=False, allow_nan=False, indent=2), encoding="utf-8")
     (directory / "native-candidate.json").write_text(json.dumps(native, ensure_ascii=False, allow_nan=False), encoding="utf-8")
     lines = ['# Filter design report', "", f"Project: {project.name}", f"Target tier: {design['tier']}",
@@ -41,6 +41,11 @@ def export_bundle(project, design, directory, joint=None):
              '| Channel | Design sample rate | Design length | Target error: before to after | Phase mode |', "|---|---:|---:|---|---|"]
     if not native["encoding_available"]:
         lines[7:7] = ['Native encoding was not generated: ' + native["encoding_unavailable_reason"], ""]
+    if design.get("joint_optimization"):
+        optimization=design["joint_optimization"]
+        lines[7:7]=["Joint design space: "+optimization["design_space"],
+                     optimization["native_realization_notice"],
+                     "Program-input sums, separate-position errors and holdout results are recorded in design-report.json.",""]
     for item in design["channels"]:
         m = item["metrics"]
         lines.append(f"| {item['channel']} | {item['sample_rate']} | {item['design_length']} | {m['rms_before_db']:.2f} → {m['rms_after_db']:.2f} dB | {m['phase_mode']} |")

@@ -7,8 +7,10 @@ import uuid
 
 import numpy as np
 
-CHANNELS = ("FL", "FR", "C", "SLA", "SRA", "SBL", "SBR", "FWL", "FWR", "CH", "FHL", "FHR", "RHL", "RHR", "SHL", "SHR", "TFL", "TFR", "TML", "TMR", "TRL", "TRR", "TS", "FDL", "FDR", "SDL", "SDR", "BDL", "BDR", "SW1", "SW2", "SW3", "SW4")
+CHANNELS = ("FL", "FR", "C", "SLA", "SRA", "SBL", "SBR", "SB", "SLB", "SRB", "FWL", "FWR", "CH", "FHL", "FHR", "RHL", "RHR", "SHL", "SHR", "TFL", "TFR", "TML", "TMR", "TRL", "TRR", "TS", "FDL", "FDR", "SDL", "SDR", "BDL", "BDR", "SW1", "SW2", "SW3", "SW4")
 ALIASES = {"L": "FL", "R": "FR", "LEFT": "FL", "RIGHT": "FR", "SL": "SLA", "SR": "SRA", "SUB": "SW1", "SW": "SW1", "LFE": "SW1"}
+ALIASES.update({f"SWMIX{i}":f"SW{i}" for i in range(1,5)})
+ALIASES.update({"SBC":"SB","CB":"SB"})
 
 
 def channel_and_position(name: str, fallback: str = "p0") -> tuple[str, str]:
@@ -93,9 +95,11 @@ class Project:
         return sorted({m.channel for m in self.measurements}, key=lambda c: (order.get(c, 99), c))
 
     def summary(self):
+        from .layouts import summarize_layout
         return {"id": self.id, "name": self.name, "origin": self.origin, "model": self.model,
                 "tier": self.tier, "channels": self.channels,
                 "positions": sorted({m.position for m in self.measurements}),
                 "measurement_count": len(self.measurements),
                 "ir_count": sum(m.ir is not None for m in self.measurements),
+                "layout":summarize_layout(self.channels,self.measurements),
                 "warnings": self.warnings, "measurements": [m.summary() for m in self.measurements]}

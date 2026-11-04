@@ -4,12 +4,12 @@
 
 | Component | Destination | Setup required |
 |---|---|---|
-| Source, issues and tags | `haomjc/audioseyX` on GitHub | Create the repository and push the reviewed source |
+| Source, issues and tags | [haomjc/audioseyX](https://github.com/haomjc/audioseyX) on GitHub | Public repository exists; CI checks subsequent source updates |
 | Python package | `audioseyX` on PyPI | Existing PyPI account; verify name availability and configure a Trusted Publisher |
 | Main documentation | Read the Docs | Create/connect the account, import the GitHub repository and build `.readthedocs.yaml` |
 | Windows executable | GitHub Actions artifact, then a reviewed GitHub Release | Run the Windows workflow against a version tag |
 
-These are intended destinations, not claims of live publication. Package-index names are not reserved by a local configuration or a pending publisher.
+GitHub is public. The PyPI and Read the Docs destinations still require account setup; their local configuration is not a live-publication claim. Package-index names are not reserved by a local configuration or a pending publisher.
 
 ## First GitHub push
 
@@ -40,6 +40,25 @@ The repository includes `.readthedocs.yaml`, `docs/conf.py` and a pinned documen
 Enable the default branch for the development documentation. Activate release tags as versions when ready. Do not advertise a stable documentation version before a stable software release exists. After the site is live, add its real URL to the project metadata and README.
 
 Official instructions: [add a project](https://docs.readthedocs.com/platform/stable/intro/add-project.html), [configuration](https://docs.readthedocs.com/platform/stable/config-file/v2.html), and [versions](https://docs.readthedocs.com/platform/stable/versions.html).
+
+### API and command-line maintenance
+
+The official [API v3](https://docs.readthedocs.com/platform/stable/api/v3.html) supports importing projects, changing project settings, synchronizing/activating versions, triggering builds and reading build results. Browser login does not authenticate a separate command-line client. Get an API token from the account's profile settings and configure it locally as `READTHEDOCS_TOKEN`; do not put it in source, shell command arguments, issues or chat.
+
+This repository includes a small independent maintenance client, not an official Read the Docs CLI:
+
+```console
+python tools/readthedocs.py status
+python tools/readthedocs.py import
+python tools/readthedocs.py versions
+python tools/readthedocs.py build --version latest
+python tools/readthedocs.py sync
+python tools/readthedocs.py activate --version v0.5.0a1
+```
+
+Use the exact version slug returned by `versions`. Import creates an English project using the public GitHub repository and `.readthedocs.yaml`. Import is a one-time operation; do not repeat it to update an existing project. The client takes its token only from the environment and rejects redirects rather than forwarding authorization headers. A 404 can indicate a nonexistent, differently named or inaccessible project.
+
+After the initial GitHub integration is configured, pushes and tags can trigger builds through the repository webhook. API commands are useful for setup, inspection and requested rebuilds; normal documentation changes remain reviewed source changes in Git.
 
 ## Maintenance
 

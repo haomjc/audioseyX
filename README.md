@@ -4,15 +4,19 @@
 
 audioseyX brings measurement files, REW integration, room analysis and Audyssey-aware filter design into one local interface. It preserves individual microphone positions and original response timing, evaluates the actual truncated filters, and keeps numerical predictions separate from hardware and acoustic verification.
 
-**Status: 0.4.0a1, an experimental public preview.** PyPI publishing and the Read the Docs site are being configured; a local build does not establish that either service is live. No physical receiver has been validated. This project is independent of Audyssey, Denon, Marantz and Dirac.
+**Status: 0.5.0a1, an experimental public preview.** PyPI publishing and the Read the Docs site are being configured; a local build does not establish that either service is live. Read-only information and speaker settings have been checked on an X3700H; acoustic capture, native reconstruction and transfer remain unverified. This project is independent of Audyssey, Denon, Marantz and Dirac.
 
 ## What works offline
 
 - Import ADY, MQX, MDAT frequency data, mono impulse-response WAV and `.awb` projects.
 - Preserve measurement positions, repeats, sample rates and original timing.
+- Work with variable channel counts, zero to four subwoofer outputs and custom height layouts; report missing output/position coverage. Examples range from 2.0 to 9.4.6 without certifying a receiver's capacity.
+- Read compatible receiver speaker settings and load reviewed per-channel crossovers, bass mode and LFE low-pass into the offline model. Select physical capture outputs explicitly.
 - Inspect frequency response, group delay, impulse, ETC, Schroeder decay and a low-frequency STFT spectrogram.
 - Report EDT/T20/T30 only when the current quality checks pass; do not invent time-domain measurements from magnitude-only files.
 - Design minimum-phase filters within separate MultEQ, XT and XT32 budgets, with constrained boost and measured-band coverage.
+- Jointly optimize complex main/subwoofer and LFE responses across positions and repeats, using every selected FIR parameter. Distinguish expanded references from actual native coefficients supplied through a synthesis model.
+- Apply per-frequency Gaussian windowing to correction goals, inspect repeat consistency, hold positions out for validation, and fully re-solve explicit crossover candidates.
 - Export per-channel filter WAVs, source measurements and reports, even without native compatibility data.
 - Run deterministic numerical benchmarks with a synthetic holdout position excluded from design.
 - Save compressed projects with array checksums and download results with segment retries and a whole-file hash check.
@@ -46,6 +50,7 @@ The distribution name is `audioseyX`; the import module and command are `audiose
 audioseyx --data-dir ./my-audio-projects
 audioseyx --version
 audioseyx --self-test --report self-test.json
+audioseyx --joint-benchmark --report joint-benchmark.json
 ```
 
 ## Receiver integration
@@ -57,6 +62,8 @@ Experimental stock-microphone capture targets the observed Float receiver protoc
 The private 0.3 research prototype is separate from this public source tree. Its local compatibility vectors are not evidence of a license to redistribute them and are not included here.
 
 This is not an implementation of Dirac ART's arbitrary cross-channel support matrix. It does not modify receiver firmware or add routing paths to the existing DSP.
+
+The new joint mode is export-only. A feasible improving filter can be returned before numerical convergence, and expanded XT32 taps do not establish writable native realizability. See [joint design](docs/joint-design.md) for the model, full-layout benchmark, supplied native synthesis format and limits. No same-data OCA/GSonic comparison has been established.
 
 ## Documentation and contribution
 

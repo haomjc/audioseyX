@@ -9,10 +9,11 @@ recursive-include .github *.yml *.md
 recursive-include examples *.mqx *.mdat *.md *.json
 exclude src/audioseyx/native_tables.json
 exclude src/audioseyx/channel_addresses.json
-global-exclude __pycache__ *.py[cod] *.exe *.log *.ady *.oca *.awb .env .pypirc
+global-exclude __pycache__ *.py[cod] *.exe *.log *.ady *.oca *.awb *.npz *.npy .env .pypirc
 prune .git
 prune .venv
 prune .private
+prune .native-profiles
 prune dist
 prune build
 prune docs/_build

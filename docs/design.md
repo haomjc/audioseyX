@@ -34,4 +34,6 @@ The current workflow redesigns the final correction. It does not automatically a
 
 ## Shared subwoofer
 
-One independent subwoofer can be evaluated for a common relative delay and polarity across matching positions. The specified crossover model is an assumption to verify. Suggestions are not automatically written to receiver distance or crossover settings. Multi-subwoofer optimization and arbitrary ART-style cross-channel support are not implemented.
+The independent designer can suggest common relative delay and polarity for one independent subwoofer across matching positions. These suggestions are not automatically written to receiver settings.
+
+The experimental [full complex joint designer](joint-design.md) includes all program speakers, shared independently controllable subwoofers and LFE in one full-FIR objective, with optional full re-solving across crossover candidates. Receiver paths and crossover models remain assumptions to verify. Arbitrary ART-style main-to-main support paths cannot be added by this calibration interface.

@@ -103,7 +103,22 @@ class NativeSession:
         raise ValueError('The measurement response packets are incomplete')
 
 
-def capture_position(receiver, position=1, repeats=1, cancel=None, progress=None, on_measurement=None, settle_seconds=5):
+def select_capture_outputs(status,channels=None):
+    raw_ids=[str(key) for row in status.get("ChSetup",[]) for key,setting in row.items() if setting!="N"]
+    normalized=[ALIASES.get(name,name) for name in raw_ids]
+    if len(normalized)!=len(set(normalized)):
+        raise ValueError("Receiver channel aliases are ambiguous; no capture was started")
+    if any(name not in CHANNELS for name in normalized):
+        raise ValueError("Unsupported measurement channels: "+", ".join(name for name in normalized if name not in CHANNELS))
+    if channels is not None:
+        if not isinstance(channels,list) or not channels or len(channels)!=len(set(channels)) or set(channels)-set(normalized):
+            raise ValueError("Capture selection must list distinct receiver-configured outputs")
+        raw_ids=[raw for raw,canonical in zip(raw_ids,normalized) if canonical in channels]
+    if not raw_ids:raise ValueError("The receiver reported no selected measurable channels")
+    return raw_ids
+
+
+def capture_position(receiver, position=1, repeats=1, cancel=None, progress=None, on_measurement=None, settle_seconds=5, channels=None):
     if not receiver.get("connected"):
         raise ValueError('Connect the receiver first')
     info, status = receiver["info"], receiver["status"]
@@ -115,12 +130,7 @@ def capture_position(receiver, position=1, repeats=1, cancel=None, progress=None
         raise ValueError('Disconnect the receiver headphone output before measuring speakers')
     if not 1 <= int(position) <= 20 or not 1 <= int(repeats) <= 5:
         raise ValueError('Position must be 1-20 and repeats must be 1-5')
-    raw_ids = [str(key) for row in status.get("ChSetup", []) for key, setting in row.items() if setting != "N"]
-    if not raw_ids:
-        raise ValueError('The receiver reported no measurable channels')
-    for name in raw_ids:
-        if ALIASES.get(name, name) not in CHANNELS:
-            raise ValueError('Unsupported measurement channels: ' + name)
+    raw_ids=select_capture_outputs(status,channels)
     order = {name: index for index, name in enumerate(CANONICAL)}
     raw_ids.sort(key=lambda name: order.get(name, 999))
     event = cancel or threading.Event()
@@ -161,6 +171,9 @@ def capture_position(receiver, position=1, repeats=1, cancel=None, progress=None
                     measurement = Measurement(channel, f"p{position - 1}", f"{channel} / position {position} / repeat {repeat + 1} time(s)", 48000, samples,
                                               timing_reference="native_receiver_clock_unverified",
                                               metadata={"repeat": repeat + 1, "report": details,
+                                                        "receiver_raw_channel_id":raw_id,
+                                                        "selected_capture_outputs":raw_ids,
+                                                        "configured_outputs_not_selected":[str(key) for row in status.get("ChSetup",[]) for key,setting in row.items() if setting!="N" and str(key) not in raw_ids],
                                                         "system_delay_reported": value(info, "SysDelay", "SystemDelay"),
                                                         "receiver_mic_processing_verified": False})
                     measurements.append(measurement)

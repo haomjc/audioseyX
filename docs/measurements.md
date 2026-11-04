@@ -18,6 +18,8 @@ Connect the receiver's own microphone to its calibration input. The experimental
 
 This route is not yet hardware-verified. Fixed-device capture requires a separate sequence; imported stock-app measurements are an alternative. A receiver-generated calibration sweep is not automatically equivalent to a normal-playback verification measurement.
 
+Review the [configured and physical output selection](layouts.md) before starting. Subwoofer outputs reported as `SWMIX` keep their raw protocol IDs. Excluded configured outputs are recorded explicitly. A microphone appearing as connected does not start measurement; the ready control and capture action are still required.
+
 ## REW
 
 Install REW separately and complete its device and microphone setup. The workbench can request API startup, inspect offered commands and read original responses. It does not bundle REW or alter its license.
