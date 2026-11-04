@@ -37,6 +37,13 @@ def run_joint_benchmarks(iterations=60, progress=None):
                    "expanded_fir_variables":optimization["optimization_variables"],"writable_native_coefficients":optimization["writable_native_coefficients"]})
     checks.append({"name":"Returned FIR gain constraints", "passed":optimization["gain_constraints_satisfied"],
                    "maximum_violation_db":optimization["actual_bound_violation_db"],"tolerance_db":optimization["gain_bound_tolerance_db"]})
+    bound=optimization["reachability"]
+    checks.append({"name":"Unchanged objective and conditional reachability bounds",
+                   "passed":bound["problem_unchanged_verified"] and bound["lower_bound_consistency_passed"]
+                   and bound["model_objective_gap_upper_bound"] is not None,
+                   "model_risk_lower_bound":bound["model_risk_lower_bound"],
+                   "returned_risk_objective":bound["returned_risk_objective"],
+                   "model_objective_gap_upper_bound":bound["model_objective_gap_upper_bound"]})
     for label,values in [("Training",evaluation),("Excluded position",evaluation["holdout"])]:
         baseline=values["independent_0_4_baseline"]["mean_group_rms_db"]
         joint=values["joint"]["mean_group_rms_db"]

@@ -114,6 +114,10 @@ class HttpWorkflowTests(unittest.TestCase):
         self.assertEqual([item["channel"] for item in state["design"]["routed_charts"]],["FL","LFE"])
         self.assertEqual(state["joint"]["kind"],"full_joint_fir")
         self.assertFalse(state["design"]["receiver_upload_ready"])
+        bound=state["design"]["joint_optimization"]["reachability"]
+        self.assertTrue(bound["lower_bound_consistency_passed"])
+        self.assertFalse(bound["requested_target_changed"])
+        self.assertIsNotNone(bound["model_objective_gap_upper_bound"])
         with self.request("/download") as response:
             self.assertTrue(response.read().startswith(b"PK"))
 

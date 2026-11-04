@@ -16,6 +16,7 @@ from .joint_fir import FilterSpace, Observation, JointFIRProblem, parseval_energ
 from .measurement_quality import frequency_dependent_response, repeat_diagnostics
 from .model import Project
 from .realization import load_realization
+from .reachability import analyze_reachability
 
 X3700H_CROSSOVERS = (40, 60, 80, 90, 100, 110, 120, 150, 180, 200, 250)
 
@@ -93,8 +94,21 @@ def prepare_native_problem(project, tier, settings, *, references=None, progress
             count = prod(len(groups[(channel, position)]) for channel in used)
             combinations.append((position, source, used, count))
     scenario_count = sum(row[3] for row in combinations)
+    reachability_iterations = settings.get("joint_reachability_iterations", 40)
+    if not isinstance(reachability_iterations, int) or not 0 <= reachability_iterations <= 500:
+        raise ValueError("Joint reachability iterations must be 0-500")
+    if not isinstance(settings.get("joint_endpoint_refinement", False), bool):
+        raise ValueError("Joint endpoint refinement must be a boolean")
+    for option,default in [("joint_polish_pool_size",4),("joint_polish_passes",1)]:
+        value=settings.get(option,default)
+        if not isinstance(value,int) or not 0<=value<=8:
+            raise ValueError("Joint polishing pool size and passes must be 0-8")
     # Estimate measured spectra, cached routing terms, targets and Gram blocks.
     estimated_bytes = bins * (16 * (len(project.measurements) * (len(source_ids) + 1) + scenario_count + len(channels) ** 2) + 8 * 16)
+    # The diagnostic retains every scenario's annular error, full native gain
+    # envelopes and a shared spectral starting point, with bounded Gram batches.
+    estimated_bytes += bins * (8 * scenario_count + 64 * len(channels)) + 8 * 1024 ** 2
+    estimated_bytes += 8 * int(settings.get('joint_polish_pool_size',4)) * sum(cap.shape(c)[0] for c in channels)
     if settings.get('joint_exact_spatial_risk',True) and float(settings.get('position_risk',.35))>0 and len(positions)>1:
         sparse_blocks=len(mains)+len(subs)**2+2*len(mains)*len(subs)
         parameters=sum(cap.shape(channel)[0] for channel in channels)
@@ -503,9 +517,19 @@ def design_native_joint(project, tier, settings, progress=None, *, cancel=None):
                                       risk_inner_iterations=int(settings.get('joint_risk_inner_iterations',6)),
                                       risk_inner_tolerance=float(settings.get('joint_risk_inner_tolerance',1e-7)),
                                       anderson_depth=int(settings.get('joint_anderson_depth',0)),
+                                      endpoint_refinement=settings.get('joint_endpoint_refinement',False),
+                                      polish_pool_size=settings.get('joint_polish_pool_size',4),
+                                      polish_passes=settings.get('joint_polish_passes',1),
                                       risk_weight=float(settings.get("position_risk", .35)),
                                       risk_temperature=float(settings.get("risk_temperature", .15)), progress=progress, cancel=cancel,
                                       initial=baseline if realization is None else None)
+    if progress:
+        progress(87, "Analyzing the unchanged target and shared-filter reachability bounds")
+    optimization["reachability"] = analyze_reachability(
+        problem, taps, risk_weight=float(settings.get("position_risk", .35)),
+        temperature=float(settings.get("risk_temperature", .15)),
+        bound_tolerance_db=float(settings.get("joint_bound_tolerance_db", .15)),
+        iterations=int(settings.get("joint_reachability_iterations", 40)), cancel=cancel)
     designs = []
     for output, space in enumerate(problem.spaces):
         independent = independent_items[output]

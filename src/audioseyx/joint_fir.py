@@ -553,19 +553,84 @@ class JointFIRProblem:
             return float((1-risk_weight)*(mass@means)+risk_weight*temperature*logsumexp(means/temperature,b=mass)+regularizer@basis)
         return objective
 
-    def feasible_block_candidate(self,anchor,proposal,risk_weight,temperature,tolerance_db):
+    def feasible_block_candidate(self,anchor,proposal,risk_weight,temperature,tolerance_db,reverse=False):
         current=anchor.copy()
-        for where in self.slices:
+        for where in reversed(self.slices) if reverse else self.slices:
             direction=current.copy();direction[where]=proposal[where]
             current,_=self.feasible_line_candidate(current,direction,risk_weight,temperature,tolerance_db)
         return current
+
+    def endpoint_preserving_proposal(self, anchor, proposal):
+        """Remove only endpoint-changing components from a refinement direction.
+
+        A single active DC/Nyquist constraint can block an otherwise useful
+        full-tap line step. Project the proposed direction onto the null space
+        of those two *actual* synthesis rows, then check every bin in the usual
+        feasible line search. This constructs an additional direction; it does
+        not fix endpoints or remove variables from the main optimization.
+        """
+        result = np.asarray(proposal, dtype=float).copy()
+        for space, where in zip(self.spaces, self.slices):
+            rows = np.asarray([space.adjoint(np.ones(space.length)),
+                               space.adjoint(1. - 2. * (np.arange(space.length) % 2))])
+            direction = result[where] - anchor[where]
+            correction = np.linalg.pinv(rows @ rows.T, rcond=1e-12) @ (rows @ direction)
+            result[where] -= rows.T @ correction
+        return result
+
+    def polish_candidates(self, anchor, proposals, *, risk_weight=.35, temperature=.15,
+                          tolerance_db=.15, passes=1, cancel=None):
+        """Fuse complete candidate vectors using the original feasible objective.
+
+        Proposals need not themselves be feasible. Every accepted full-vector
+        or output-block step must improve the original risk and pass all gain
+        bounds. Endpoint-preserving variants retain all native parameters.
+        """
+        if not isinstance(passes,int) or not 0<=passes<=8:
+            raise ValueError('Candidate polishing passes must be 0-8')
+        if not 0<=risk_weight<=1 or not np.isfinite(temperature) or temperature<=0:
+            raise ValueError('Invalid candidate polishing risk settings')
+        if not np.isfinite(tolerance_db) or not 0<=tolerance_db<=1:
+            raise ValueError('Invalid candidate polishing gain envelope')
+        candidates=[np.asarray(anchor,dtype=float)]+[np.asarray(value,dtype=float) for value in proposals]
+        if any(value.shape!=(self.size,) or not np.isfinite(value).all() for value in candidates):
+            raise ValueError('Every polishing candidate must contain the complete finite parameter vector')
+        best=candidates[0].copy()
+        if self.bound_violation_db(best)>tolerance_db+1e-8:
+            raise ValueError('Candidate polishing requires a feasible anchor')
+        initial=self.risk(best,risk_weight,temperature)[0]
+        score=initial;attempts=0;improvements=0;history=[]
+        for cycle in range(passes):
+            before=score
+            for index,proposal in enumerate(candidates[1:]):
+                if cancel is not None and cancel.is_set():
+                    raise InterruptedError('Joint candidate polishing cancelled')
+                for preserve in [False,True]:
+                    direction=self.endpoint_preserving_proposal(best,proposal) if preserve else proposal
+                    line,_=self.feasible_line_candidate(best,direction,risk_weight,temperature,tolerance_db)
+                    block=self.feasible_block_candidate(best,direction,risk_weight,temperature,tolerance_db,reverse=bool(cycle%2))
+                    for kind,value in [('line',line),('output_blocks',block)]:
+                        attempts+=1
+                        trial=self.risk(value,risk_weight,temperature)[0]
+                        if trial<score and self.bound_violation_db(value)<=tolerance_db+1e-8:
+                            best,score=value,trial;improvements+=1
+                            history.append({'pass':cycle+1,'candidate':index,'direction':kind,
+                                            'endpoint_preserved':preserve,'risk_objective':score})
+            if score>=before-1e-12*max(1.,abs(before)):break
+        return best,{'complete_candidate_vectors':len(candidates)-1,'passes_requested':passes,
+                     'accepted_improvements':improvements,'feasible_directions_checked':attempts,
+                     'initial_risk_objective':initial,'risk_objective':score,
+                     'actual_bound_violation_db':self.bound_violation_db(best),
+                     'all_parameters_retained':True,'original_objective_preserved':True,
+                     'history':history,'global_optimality_claimed':False}
 
     def solve(self, *, iterations=60, cg_iterations=100, cg_tolerance=1e-6,
               risk_weight=.35, risk_temperature=.15, regularization_rounds=3,
               rho=.3, bound_tolerance_db=.15, progress=None, cancel=None, initial=None,
               lower_bound_method="supporting_halfplanes",penalty_metric="uniform",
               over_relaxation=1.,penalty_adaptation='rms',exact_spatial_risk=True,
-              risk_inner_iterations=6,risk_inner_tolerance=1e-7,anderson_depth=0):
+              risk_inner_iterations=6,risk_inner_tolerance=1e-7,anderson_depth=0,
+              endpoint_refinement=False,polish_pool_size=0,polish_passes=1):
         if not 1 <= iterations <= 500 or not 1 <= cg_iterations <= 1000:
             raise ValueError("Invalid joint solver iteration budget")
         if not 0 <= risk_weight <= 1 or not np.isfinite(risk_temperature) or risk_temperature <= 0:
@@ -583,6 +648,9 @@ class JointFIRProblem:
         if not isinstance(exact_spatial_risk,bool) or not 1<=risk_inner_iterations<=30 or not 0<risk_inner_tolerance<1:
             raise ValueError('Invalid spatial-risk inner-solve controls')
         if not isinstance(anderson_depth,int) or not 0<=anderson_depth<=8:raise ValueError('Anderson history depth must be 0-8')
+        if not isinstance(endpoint_refinement,bool):raise ValueError('Endpoint refinement must be a boolean')
+        if not isinstance(polish_pool_size,int) or not 0<=polish_pool_size<=8:raise ValueError('Polishing pool size must be 0-8')
+        if not isinstance(polish_passes,int) or not 0<=polish_passes<=8:raise ValueError('Polishing passes must be 0-8')
         x = self.prior.copy() if initial is None else np.asarray(initial,dtype=float).copy()
         if x.shape!=(self.size,) or not np.isfinite(x).all():
             raise ValueError("Initial joint parameters do not match the complete problem")
@@ -640,6 +708,9 @@ class JointFIRProblem:
         update_iterations={phase_period*index for index in range(1,regularization_rounds) if phase_period*index<iterations}
         final_update=max(update_iterations,default=0)
         update_count=0
+        endpoint_refinement_attempts=0;endpoint_refinement_improvements=0
+        pool=[];last_pooled=-1
+        pool_iterations={max(0,int(np.ceil(iterations*i/polish_pool_size))-1) for i in range(1,polish_pool_size+1)} if polish_pool_size else set()
         accelerator=AndersonHistory(anderson_depth) if anderson_depth else None
         acceleration_key=None;pending_acceleration=None;acceleration_attempts=0;acceleration_rejected=0
         scales=[]
@@ -755,6 +826,14 @@ class JointFIRProblem:
                 candidate_score,_=self.risk(candidate,risk_weight,risk_temperature)
                 if candidate_score<best_score:
                     best,best_score=candidate,candidate_score
+                if endpoint_refinement:
+                    endpoint_refinement_attempts+=1
+                    proposal=self.endpoint_preserving_proposal(best,x)
+                    candidate,_=self.feasible_line_candidate(best,proposal,risk_weight,risk_temperature,bound_tolerance_db)
+                    candidate_score,_=self.risk(candidate,risk_weight,risk_temperature)
+                    if candidate_score<best_score:
+                        best,best_score=candidate,candidate_score
+                        endpoint_refinement_improvements+=1
             if (iteration+1)%10==0:
                 candidate=self.feasible_block_candidate(best,x,risk_weight,risk_temperature,bound_tolerance_db)
                 candidate_score,_=self.risk(candidate,risk_weight,risk_temperature)
@@ -765,6 +844,8 @@ class JointFIRProblem:
                             'maximum_relative_primal':relative_primal,'maximum_relative_dual':relative_dual,
                             "cg_iterations": inner[0], "cg_converged": info == 0, "rho": rho,
                             "risk_inner_converged":risk_inner_converged,"risk_inner_steps":risk_inner_steps})
+            if iteration in pool_iterations:
+                pool.append(x.copy());last_pooled=iteration
             if progress:
                 progress(round(10 + 75 * (iteration + 1) / iterations),
                          f"Joint FIR iteration {iteration + 1}/{iterations}; bound gap {violation:.3f} dB")
@@ -792,6 +873,20 @@ class JointFIRProblem:
             elif adapt_now and balance_dual > 10 * max(balance_primal, 1e-14) and rho > 1e-3:
                 rho /= 2
                 dual = [value * 2 for value in dual]
+        admm_converged=converged
+        if polish_pool_size and polish_passes:
+            if last_pooled!=len(history)-1:
+                pool.append(x.copy());pool=pool[-polish_pool_size:]
+            if progress:progress(86,'Reusing complete joint iterates under the original target and gain bounds')
+            best,polishing=self.polish_candidates(best,pool,risk_weight=risk_weight,temperature=risk_temperature,
+                                                  tolerance_db=bound_tolerance_db,passes=polish_passes,cancel=cancel)
+            if polishing['risk_objective']<best_score-1e-12*max(1.,abs(best_score)):
+                # The improved returned candidate has not passed a fresh KKT
+                # stopping test, even if the earlier ADMM iterate had done so.
+                converged=False
+            best_score=polishing['risk_objective']
+        else:
+            polishing={'complete_candidate_vectors':0,'accepted_improvements':0,'enabled':False}
         identity_score, _ = self.risk(self.identity, risk_weight, risk_temperature)
         prior_score, _ = self.risk(self.prior, risk_weight, risk_temperature)
         self.last_iterate=x.copy()
@@ -801,6 +896,7 @@ class JointFIRProblem:
                       "common_fft_size": self.nfft, "iterations": len(history), "cg_iterations": total_cg,
                       "preconditioner":preconditioner_name,
                       "numerically_converged": converged, "actual_bound_violation_db": self.bound_violation_db(best),
+                      "admm_numerically_converged":admm_converged,"candidate_polishing":polishing,
                       "numerical_convergence_scope":"final_phase_exact_spatial_risk" if risk_cache is not None else "final_frozen_phase_risk_subproblem",
                       "spatial_risk_solver":"exact_logsumexp_newton_cg" if risk_cache is not None else "quadratic_or_frozen_weight_cg",
                       "risk_inner_converged":risk_inner_converged,
@@ -817,6 +913,9 @@ class JointFIRProblem:
                       'over_relaxation':over_relaxation,'penalty_adaptation':penalty_adaptation,
                       'anderson_depth':anderson_depth,'acceleration_attempts':acceleration_attempts,'acceleration_rejected':acceleration_rejected,
                       "full_tap_feasible_block_refinement":True,
+                      "endpoint_preserving_refinement":endpoint_refinement,
+                      "endpoint_refinement_attempts":endpoint_refinement_attempts,
+                      "endpoint_refinement_improvements":endpoint_refinement_improvements,
                       "returned_bound_diagnostics":self.bound_diagnostics(best),
                       "last_iterate_bound_diagnostics":self.bound_diagnostics(x),
                       "global_optimality_claimed": False, "native_hardware_verified": False,

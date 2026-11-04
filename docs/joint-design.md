@@ -22,7 +22,11 @@ The implementation uses matrix-free normal equations and conjugate gradients, an
 
 Native-topology frequency preconditioning uses an exact main/subwoofer Schur complement when the observation graph proves that main/main cross blocks are zero. Arbitrary graphs fall back to full complex blocks. No optimization variables or observations are removed by this factorization. The native wrapper defaults to a positive root-data spectral ADMM metric; other metrics remain explicit research options.
 
+An optional Python setting `joint_endpoint_refinement=true` adds full-parameter search directions that preserve the current feasible DC and Nyquist values. It uses the actual native synthesis adjoint when supplied, and still checks all native FFT bins. It only constructs extra refinement directions; the main optimization keeps all endpoint degrees of freedom. This research option defaults to false: analytical blocked-direction tests pass, but the first full-size comparison did not establish a consistent improvement.
+
 The memory check estimates the complete problem and stops when the explicit budget is insufficient. It does not remove positions, repeats or taps to make the problem fit. Computation can be cancelled from the progress panel.
+
+The native wrapper retains four complete joint iterates for one final candidate-polishing pass. It reuses full-vector and individual-output-block directions, including endpoint-preserving variants, under the **original** risk objective and every original gain bound. It accepts only strictly improving feasible candidates. Different proposals do not acquire their own targets or looser constraints. All FIR/native parameters remain present, and retained-vector memory is included in the budget. Python settings `joint_polish_pool_size` and `joint_polish_passes` accept 0–8, with defaults 4 and 1. The lower-level `polish_candidates` API can compare other complete vectors under the same rules. This is a feasible local improvement procedure, not a global optimality claim. If polishing changes the returned candidate after ADMM stopping, numerical convergence of that new candidate is not inferred.
 
 The declared gain-bound numerical envelope is applied consistently to both projection and returned-filter feasibility. It is explicit in the UI and report; choose zero to request nominal limits rather than an extra dB envelope. Phase anchors and their supporting subproblems use the same admissible bounds.
 
@@ -70,6 +74,24 @@ No receiver synthesis model is bundled. The sparse identities used in tests are 
 
 ## Validation
 
+### Reachability under the original target
+
+Each design reports an optimistic lower bound on its **unchanged complex risk objective** and, when the returned filters meet the declared gain envelope, an upper bound on their remaining objective gap. These dimensionless values are neither magnitude-error dB nor measured acoustic improvement. The bounds are conditional on the supplied measurements, routing assumptions, FFT grid, targets and numerical envelope. The analysis never edits the requested target, refits a held-out position or changes the returned filters.
+
+A reproducible SHA-256 fingerprint includes the objective weights, targets, complex routing terms, gain bounds, regularization and any supplied native synthesis matrices. It is checked before and after the analysis. Comparisons with different fingerprints need an explicit explanation of the changed problem.
+
+Two relaxations complement one another. An observation-wise annular bound uses the triangle inequalities for every main/subwoofer term, including different native Nyquist limits. A shared-output disk relaxation retains all positions, sources and repeats coupled to the same output gains at each bin, while dropping lower gain limits. Residual duals provide lower bounds even when the diagnostic iteration budget expires. Bounded-memory batches evaluate every frequency bin; they do not remove observations or shorten any designed FIR.
+
+For residual dual `y`, weight matrix `W`, routing matrix `H`, target `t` and gain limits `u`, the disk lower bound is
+
+```text
+- ||y||_W^2 - 2 Re(y* W t) - 2 sum_i u_i |(H* W y)_i|.
+```
+
+The implementation maximizes over a nonnegative scale of each residual at each bin. For smooth worst-position risk, a probability mixture gives a weighted least-squares lower bound minus the appropriate relative-entropy term. It evaluates both the position masses and the returned-filter soft-worst mixture, then combines valid bounds with the annular contribution. This uses the [weak-duality principle described by Boyd and Vandenberghe](https://web.stanford.edu/~boyd/cvxbook/).
+
+Finite causal support, real endpoint gains, supplied native synthesis constraints and nonnegative regularization are relaxed. Floating-point safety margins are applied, but this is not a formal directed-rounding certificate. A small conditional objective gap does not establish hardware reconstruction, continuous-frequency headroom or independent acoustic performance. Diagnostic controls in the Python settings use `joint_reachability_iterations` (default 40; 0–500). Zero iterations still evaluates a valid residual dual at the initial spectra.
+
 Specify position IDs in **Held-out positions**, then inspect the Results page. Plots show routed program-input sums. The JSON report retains per-position errors, repeat diagnostics, gain gaps, convergence history, model assumptions and independent-reference results. The reference is **this project's 0.4 algorithm**, rather than an OCA/GSonic run.
 
 Run the fixed full-layout synthetic benchmark without connecting to any receiver:
@@ -78,4 +100,4 @@ Run the fixed full-layout synthetic benchmark without connecting to any receiver
 audioseyx --joint-benchmark --report joint-benchmark.json
 ```
 
-The [recorded 0.5.0a1 result](https://github.com/haomjc/audioseyX/blob/main/examples/benchmarks/joint-0.5.0a1.json) includes settings, measurement fingerprint and dependency versions. Same-data OCA exports and normal-playback measurements are still required to establish comparative real-room performance.
+The [recorded 0.5.0a3 result](https://github.com/haomjc/audioseyX/blob/main/examples/benchmarks/joint-0.5.0a3.json) includes settings, measurement fingerprint, dependency versions, candidate-polishing history and conditional reachability bounds. Its full 195,586-parameter fixture improves both training and excluded-position errors relative to this project's independent reference; the solver still reports numerical convergence as unestablished. A separate [three-seat synthetic result](https://github.com/haomjc/audioseyX/blob/main/examples/benchmarks/three-seat-0.5.0a3.json) retains centre/left/right priorities and an excluded spatial holdout. These are abstract generated rooms. Same-data OCA exports and normal-playback measurements are still required to establish comparative real-room performance.

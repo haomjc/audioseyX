@@ -37,6 +37,74 @@ def flat_project(positions=("p0","p1"), channels=("FL","SW1"), repeats=1):
 
 
 class FullSpaceOperatorTests(unittest.TestCase):
+    def test_endpoint_refinement_escapes_a_blocked_line_without_relaxing_any_bin(self):
+        n = 64
+        neutral = np.r_[1., np.zeros(7)]
+        upper = np.full(33, 4.)
+        upper[0] = 1
+        space = FilterSpace("FL", 48000, 8, n, neutral, neutral, 0, upper, np.zeros(8))
+        one = np.ones(33, dtype=complex)
+        observation = Observation("p0", "FL", ((0, one),), one.copy(), np.ones(33))
+        p = JointFIRProblem([space], [observation], n)
+        proposal = np.array([.5, .4, .4, .1, 0, 0, 0, 0])
+        corrected = p.endpoint_preserving_proposal(neutral, proposal)
+        observation.target = p.common_spectra(corrected)[0]
+        stalled, alpha = p.feasible_line_candidate(neutral, proposal, 0, .15, 0)
+        self.assertEqual(alpha, 0)
+        improved, alpha = p.feasible_line_candidate(neutral, corrected, 0, .15, 0)
+        self.assertGreater(alpha, .99)
+        self.assertEqual(improved.shape, neutral.shape)
+        self.assertLess(p.bound_violation_db(improved), 1e-9)
+        self.assertLess(p.risk(improved, 0)[0], p.risk(stalled, 0)[0] * 1e-6)
+        polished,report=p.polish_candidates(neutral,[proposal],risk_weight=0,temperature=.15,tolerance_db=0)
+        self.assertLess(p.risk(polished,0)[0],1e-10)
+        self.assertGreater(report['accepted_improvements'],0)
+        self.assertTrue(report['original_objective_preserved'])
+        self.assertTrue(report['all_parameters_retained'])
+        np.testing.assert_allclose(p.native_spectra(corrected)[0][[0, -1]],
+                                   p.native_spectra(neutral)[0][[0, -1]], atol=1e-12)
+
+    def test_endpoint_projection_uses_the_actual_native_synthesis_adjoint(self):
+        rng = np.random.default_rng(90)
+        matrix = sparse.csr_matrix(rng.normal(size=(9, 4)))
+        code = np.array([1., 0, 0, 0])
+        neutral = matrix @ code
+        space = FilterSpace("FL", 48000, 9, 32, neutral, neutral, 0, 100, np.zeros(9), matrix, code, code)
+        one = np.ones(17, dtype=complex)
+        p = JointFIRProblem([space], [Observation("p0", "FL", ((0, one),), one, np.ones(17))], 32)
+        proposal = p.endpoint_preserving_proposal(code, rng.normal(size=4))
+        np.testing.assert_allclose(p.native_spectra(proposal)[0][[0, -1]],
+                                   p.native_spectra(code)[0][[0, -1]], atol=1e-12)
+        self.assertEqual(len(proposal), 4)
+
+    def test_candidate_fusion_retains_the_best_feasible_full_vector(self):
+        n=32;neutral=np.array([1.,0.,0.,0.]);one=np.ones(17,dtype=complex)
+        space=FilterSpace('FL',48000,4,n,neutral,neutral,.5,1.2,np.zeros(4))
+        p=JointFIRProblem([space],[Observation('p0','FL',((0,one),),3*one,np.ones(17))],n)
+        for candidates in [[],[neutral],[np.array([20.,0,0,0])],[np.array([.1,0,0,0]),np.array([20.,0,0,0])]]:
+            result,report=p.polish_candidates(neutral,candidates,risk_weight=0,tolerance_db=0,passes=2)
+            self.assertLessEqual(p.risk(result,0)[0],p.risk(neutral,0)[0])
+            self.assertLessEqual(p.bound_violation_db(result),1e-8)
+            scores=[report['initial_risk_objective']]+[row['risk_objective'] for row in report['history']]
+            self.assertTrue(all(after<before for before,after in zip(scores,scores[1:])))
+        with self.assertRaisesRegex(ValueError,'complete'):
+            p.polish_candidates(neutral,[np.zeros(3)])
+        with self.assertRaisesRegex(ValueError,'complete'):
+            p.polish_candidates(neutral,[np.full(4,np.nan)])
+        event=threading.Event();event.set()
+        with self.assertRaises(InterruptedError):p.polish_candidates(neutral,[neutral],cancel=event)
+
+    def test_solver_reuses_full_iterates_and_reports_post_polish_convergence_separately(self):
+        n=32;neutral=np.array([1.,0.,0.,0.]);one=np.ones(17,dtype=complex)
+        space=FilterSpace('FL',48000,4,n,neutral,neutral,.1,2,np.full(4,1e-8))
+        p=JointFIRProblem([space],[Observation('p0','FL',((0,one),),one*.6,np.ones(17))],n)
+        result,report=p.solve(iterations=16,risk_weight=0,polish_pool_size=4)
+        self.assertEqual(report['candidate_polishing']['complete_candidate_vectors'],4)
+        self.assertLessEqual(report['risk_objective'],report['candidate_polishing']['initial_risk_objective'])
+        self.assertTrue(report['gain_constraints_satisfied'])
+        self.assertEqual(result.shape,(4,))
+        self.assertIn('admm_numerically_converged',report)
+
     def test_multisecant_acceleration_preserves_all_state_coordinates(self):
         history=AndersonHistory(3);matrix=np.array([[.95,.01],[0,.8]])
         value=np.array([2.,-3.])
@@ -296,6 +364,7 @@ class NativeRoutingTests(unittest.TestCase):
         b=design_native_joint(first,"XT32",settings)
         for ca,cb in zip(a["channels"],b["channels"]):np.testing.assert_allclose(ca["taps"],cb["taps"],atol=1e-12)
         self.assertFalse(a["joint_evaluation"]["holdout"]["used_for_design"])
+        self.assertEqual(a["joint_optimization"]["reachability"], b["joint_optimization"]["reachability"])
         self.assertGreater(b["joint_evaluation"]["holdout"]["joint"]["mean_group_rms_db"],a["joint_evaluation"]["holdout"]["joint"]["mean_group_rms_db"]+5)
 
 

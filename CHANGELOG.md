@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0a3 — conditional reachability analysis
+
+- Analyze the unchanged joint target using annular main/subwoofer sum inequalities and shared-output residual duals across every training position and repeat.
+- Report model-dependent objective lower bounds and remaining-gap upper bounds separately from numerical convergence, dB errors and hardware validity.
+- Retain all frequency bins with bounded-memory diagnostic batches; account for different native Nyquist limits, declared gain envelopes, smooth worst-position risk and cancellation.
+- Validate single-output limits, conflicting seats, multiple subs, native synthesis relaxations, arbitrary routing and independent small optimization references.
+- Fingerprint and recheck the complete objective and constraint model. Add optional endpoint-preserving full-parameter refinement, disabled by default pending broader evidence of improvement.
+- Retain complete joint iterates and reuse their full-vector/output-block directions in a monotonic feasible polishing pass. Preserve all parameters, targets and gain limits; report post-polish convergence separately.
+
 ## 0.5.0a2 — capture correctness and spatial optimization
 
 - Add hierarchical seat priorities, position-balanced native magnitude statistics, explicit missing-seat guards and independent holdout evaluation without refitting or renormalization.

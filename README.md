@@ -4,7 +4,7 @@
 
 audioseyX brings measurement files, REW integration, room analysis and Audyssey-aware filter design into one local interface. It preserves individual microphone positions and original response timing, evaluates the actual truncated filters, and keeps numerical predictions separate from hardware and acoustic verification.
 
-**Status: 0.5.0a2, an experimental public preview.** PyPI publishing and the Read the Docs site are being configured; a local build does not establish that either service is live. Read-only information, speaker settings and Float capture transport have been checked on an X3700H. Microphone compensation, normal-playback reconstruction and transfer remain unverified. This project is independent of Audyssey, Denon, Marantz and Dirac.
+**Status: 0.5.0a3, an experimental public preview.** PyPI publishing and the Read the Docs site are being configured; a local build does not establish that either service is live. Read-only information, speaker settings and Float capture transport have been checked on an X3700H. Microphone compensation, normal-playback reconstruction and transfer remain unverified. This project is independent of Audyssey, Denon, Marantz and Dirac.
 
 ## What works offline
 
@@ -18,6 +18,7 @@ audioseyX brings measurement files, REW integration, room analysis and Audyssey-
 - Report EDT/T20/T30 only when the current quality checks pass; do not invent time-domain measurements from magnitude-only files.
 - Design minimum-phase filters within separate MultEQ, XT and XT32 budgets, with constrained boost and measured-band coverage.
 - Jointly optimize complex main/subwoofer and LFE responses across positions and repeats, using every selected FIR parameter. Distinguish expanded references from actual native coefficients supplied through a synthesis model.
+- Analyze the unchanged joint target with gain-limit and shared-filter lower bounds, keeping conditional model gaps separate from acoustic error and hardware verification.
 - Apply per-frequency Gaussian windowing to correction goals, inspect repeat consistency, hold positions out for validation, and fully re-solve explicit crossover candidates.
 - Export per-channel filter WAVs, source measurements and reports, even without native compatibility data.
 - Run deterministic numerical benchmarks with a synthetic holdout position excluded from design.
