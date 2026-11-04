@@ -1,0 +1,42 @@
+name: Build Windows preview
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag, for example v0.4.0a1
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    env:
+      PYTHONUTF8: "1"
+      RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+      - uses: actions/setup-python@v7.1.0
+        with:
+          python-version: "3.13"
+      - run: python tools/check_release_tag.py
+      - run: python -m pip install ".[windows]"
+      - run: python -m unittest discover -s tests -v
+      - run: python tools/build_windows.py
+      - name: Packaged offline self-test
+        shell: pwsh
+        run: |
+          $previewProcess = Start-Process -FilePath './dist/windows/audioseyX.exe' -ArgumentList '--self-test','--report','packaged-self-test.json' -WindowStyle Hidden -PassThru -Wait
+          if ($previewProcess.ExitCode -ne 0) { throw 'Packaged self-test failed' }
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: audioseyX-Windows-${{ inputs.tag }}
+          path: |
+            dist/windows/audioseyX.exe
+            dist/windows/licenses/
+            packaged-self-test.json
+            LICENSE
+            THIRD_PARTY_NOTICES.md
+            third_party/

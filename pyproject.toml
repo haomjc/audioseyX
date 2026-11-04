@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "audioseyX"
+dynamic = ["version"]
+description = "Local acoustic measurement, room analysis and Audyssey-aware filter design workbench"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT AND LicenseRef-GLWTS"
+license-files = ["LICENSE", "third_party/*.txt"]
+authors = [{name = "haomjc"}]
+keywords = ["audio", "room-acoustics", "audyssey", "room-correction", "FIR", "REW"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Multimedia :: Sound/Audio :: Analysis",
+]
+dependencies = [
+  "numpy>=2.0,<3",
+  "scipy>=1.13,<2",
+  "Flask>=3.1,<4",
+  "waitress==3.0.2",
+  "platformdirs>=4,<5",
+]
+
+[project.optional-dependencies]
+dev = ["build>=1,<2", "twine>=6,<7", "PyYAML>=6,<7"]
+docs = ["sphinx>=8,<10", "myst-parser>=4,<6", "furo>=2024.8,<2027"]
+windows = ["pyinstaller>=6.16,<7; sys_platform == 'win32'"]
+
+[project.scripts]
+audioseyx = "audioseyx.app:main"
+
+[project.urls]
+Source = "https://github.com/haomjc/audioseyX"
+Issues = "https://github.com/haomjc/audioseyX/issues"
+Changelog = "https://github.com/haomjc/audioseyX/blob/main/CHANGELOG.md"
+
+[tool.setuptools.dynamic]
+version = {attr = "audioseyx.__version__"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+audioseyx = ["synthetic_hashes.json", "web/*.html", "web/*.css", "web/*.js"]
+
+[tool.setuptools.exclude-package-data]
+"*" = ["native_tables.json", "channel_addresses.json", "*.exe", "*.ady", "*.oca", "*.awb", "*.log"]

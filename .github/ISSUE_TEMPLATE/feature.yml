@@ -1,0 +1,13 @@
+name: Feature request
+description: Describe a useful new workflow or capability
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to achieve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior and constraints

@@ -1,0 +1,44 @@
+{
+  "source_repository": "https://github.com/Jamesits/eqx",
+  "source_commit": "427b7d17479806a3b35e9c66500a334f0ad86077",
+  "synthetic": true,
+  "not_for_receiver_upload": true,
+  "purpose": "公开合成文件，仅用于格式、数值和兼容性测试，不用于真实房间校准",
+  "fixtures": [
+    {
+      "filename": "Room Left.mqx",
+      "source_url": "https://raw.githubusercontent.com/Jamesits/eqx/427b7d17479806a3b35e9c66500a334f0ad86077/testdata/audyssey/mqx/Room%20Left.mqx",
+      "bytes": 179956,
+      "git_blob_sha1": "1874de9e35ddc252789e904126f3a824799b6b19",
+      "sha256": "6701cc6028e1aa4cd67f8cf12004639d8d5087961534088d943fc7607ec330ac"
+    },
+    {
+      "filename": "Mqx 5.1.mqx",
+      "source_url": "https://raw.githubusercontent.com/Jamesits/eqx/427b7d17479806a3b35e9c66500a334f0ad86077/testdata/audyssey/mqx/Mqx%205.1.mqx",
+      "bytes": 1592994,
+      "git_blob_sha1": "8a3832e1d857702a3325d8de2d3f3722eef10622",
+      "sha256": "842386190f54bc2d973d095af7dccfee5929491f79788217974d95377782c5a3"
+    },
+    {
+      "filename": "Room.mdat",
+      "source_url": "https://raw.githubusercontent.com/Jamesits/eqx/427b7d17479806a3b35e9c66500a334f0ad86077/testdata/rew/mdat/Room.mdat",
+      "bytes": 273880,
+      "git_blob_sha1": "e860d63a7007ef643d4de93fc8dfe1dac0238bd2",
+      "sha256": "04e43ccf970eabf849408962b2aa3b343177e147c1ce798c7cd24ce2b97f1708"
+    },
+    {
+      "filename": "README.md",
+      "source_url": "https://raw.githubusercontent.com/Jamesits/eqx/427b7d17479806a3b35e9c66500a334f0ad86077/testdata/README.md",
+      "bytes": 111,
+      "git_blob_sha1": "abd69f20d0c1d87ff21f4af9ccdacbfc2e7babf1",
+      "sha256": "1129512080a0d184456fbf16ecfa227fbf5253e12ca2a01591907e40e85b10fa"
+    },
+    {
+      "filename": "LICENSE",
+      "source_url": "https://raw.githubusercontent.com/Jamesits/eqx/427b7d17479806a3b35e9c66500a334f0ad86077/LICENSE",
+      "bytes": 1020,
+      "git_blob_sha1": "8d8761cbd3166f78efabb6f1385ea2c3f3845cd7",
+      "sha256": "9006ebec57003862d9d6553139b556ac0075ceb6e7607b5d86442d3aa1369dc3"
+    }
+  ]
+}

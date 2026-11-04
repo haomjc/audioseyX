@@ -1,0 +1,21 @@
+include README.md LICENSE CHANGELOG.md CONTRIBUTING.md THIRD_PARTY_NOTICES.md SECURITY.md
+include .readthedocs.yaml
+recursive-include src/audioseyx *.py *.json *.html *.css *.js
+recursive-include third_party *.txt
+recursive-include tests *.py
+recursive-include tools *.py
+recursive-include docs *.py *.md *.txt *.css *.jpg *.png *.svg
+recursive-include .github *.yml *.md
+recursive-include examples *.mqx *.mdat *.md *.json
+exclude src/audioseyx/native_tables.json
+exclude src/audioseyx/channel_addresses.json
+global-exclude __pycache__ *.py[cod] *.exe *.log *.ady *.oca *.awb .env .pypirc
+prune .git
+prune .venv
+prune .private
+prune dist
+prune build
+prune docs/_build
+prune docs/research
+prune 用户数据
+prune UserData

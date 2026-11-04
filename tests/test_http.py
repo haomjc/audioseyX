@@ -1,0 +1,139 @@
+import json
+import re
+import tempfile
+import threading
+import unittest
+from pathlib import Path
+import hashlib
+import http.client
+import io
+from urllib.error import HTTPError
+from urllib.request import Request, build_opener, ProxyHandler
+
+from audioseyx.app import run_server
+from audioseyx.model import Measurement, Project
+
+
+class HttpWorkflowTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.directory = tempfile.TemporaryDirectory(dir=Path.cwd())
+        cls.server, cls.bench, cls.address = run_server(Path(cls.directory.name).relative_to(Path.cwd()), open_browser=False)
+        cls.worker = threading.Thread(target=cls.server.serve_forever, daemon=True)
+        cls.worker.start()
+        cls.opener = build_opener(ProxyHandler({}))
+        cls.client = http.client.HTTPConnection("127.0.0.1", cls.server.server_port, timeout=10)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.client.close()
+        cls.server.shutdown()
+        cls.server.server_close()
+        cls.directory.cleanup()
+
+    def request(self, endpoint, data=None, token=None, origin=None):
+        headers = {"Content-Type": "application/json"}
+        if token:
+            headers["X-App-Token"] = token
+        if origin:
+            headers["Origin"] = origin
+        self.client.request("POST" if data is not None else "GET", endpoint,
+                            body=json.dumps(data).encode() if data is not None else None, headers=headers)
+        response = self.client.getresponse()
+        if response.status >= 400:
+            raw = response.read()
+            raise HTTPError(self.address + endpoint, response.status, response.reason, response.headers, io.BytesIO(raw))
+        return response
+
+    def test_page_assets_and_state(self):
+        with self.request("/") as response:
+            html = response.read().decode()
+        self.assertIn('audioseyX Acoustic Workbench', html)
+        self.assertNotIn("__APP_TOKEN__", html)
+        with self.request("/app.js") as response:
+            self.assertIn(b"renderTransfer", response.read())
+        with self.request("/api/state") as response:
+            state = json.load(response)
+        self.assertIn("transfer", state)
+
+    def test_writes_require_local_session_token_and_origin(self):
+        for token, origin in [(None, None), (self.bench.token, "https://example.com")]:
+            with self.assertRaises(HTTPError) as caught:
+                self.request("/api/demo", {}, token, origin)
+            self.assertEqual(caught.exception.code, 403)
+
+    def test_unknown_route_and_stale_calibration_do_not_download(self):
+        for endpoint in ["/missing", "/download-calibration"]:
+            with self.assertRaises(HTTPError):
+                self.request(endpoint)
+
+    def test_large_exports_stream_completely_and_support_ranges(self):
+        target = Path(self.directory.name) / "large-test.zip"
+        expected = bytes(range(256)) * 32768
+        target.write_bytes(expected)
+        self.bench.export_path = target
+        for _ in range(5):
+            with self.request("/download") as response:
+                actual = response.read()
+            self.assertEqual(hashlib.sha256(actual).digest(), hashlib.sha256(expected).digest())
+        # Also cover clients which explicitly ask to close after the response.
+        with self.opener.open(self.address + "/download", timeout=10) as response:
+            self.assertEqual(response.read(), expected)
+        request = Request(self.address + "/download", headers={"Range": "bytes=0-1023"})
+        with self.opener.open(request, timeout=10) as response:
+            self.assertEqual(response.status, 206)
+            self.assertEqual(response.read(), expected[:1024])
+        self.bench.export_path = None
+
+    def test_analysis_project_archive_and_cache_invalidation(self):
+        self.bench.set_project(Project("delay", [Measurement("FL", "p0", "m", ir=[0, 1, 0, 0])], "synthetic"))
+        with self.request("/api/analyze", {"index": 0}, self.bench.token) as response:
+            result = json.load(response)
+        self.assertEqual(result["project_origin"], "synthetic")
+        self.assertTrue(result["time_domain_available"])
+        with self.request("/download-analysis") as response:
+            self.assertEqual(json.load(response)["measurement_index"], 0)
+        with self.request("/download-project") as response:
+            self.assertTrue(response.read().startswith(b"PK"))
+        self.bench.set_project(Project("different", [Measurement("FR", "p1", "n", ir=[1, 0, 0])]))
+        with self.assertRaises(HTTPError):
+            self.request("/download-analysis")
+
+    def test_room_modes_api_and_analysis_script_are_available(self):
+        with self.request("/api/room-modes", {"length": 5, "width": 4, "height": 3}, self.bench.token) as response:
+            result = json.load(response)
+        self.assertAlmostEqual(result["modes"][0]["frequency_hz"], 34.3)
+        with self.request("/analysis.js") as response:
+            self.assertIn(b"drawSpectrogram", response.read())
+
+    def test_shutdown_does_not_interrupt_an_active_receiver_operation(self):
+        try:
+            for kind in ["native_measure", "transfer"]:
+                self.bench.job = {"status": "running", "kind": kind}
+                with self.assertRaises(HTTPError) as caught:
+                    self.request("/api/shutdown", {}, self.bench.token)
+                self.assertEqual(caught.exception.code, 400)
+                with self.request("/api/state") as response:
+                    self.assertEqual(json.load(response)["job"]["kind"], kind)
+        finally:
+            self.bench.job = {"status": "idle", "progress": 0, "message": "idle"}
+
+    def test_download_identity_prevents_mixing_versions_during_resume(self):
+        target = Path(self.directory.name) / "versioned.zip"
+        target.write_bytes(b"first")
+        self.bench.export_path = target
+        try:
+            with self.request("/api/download-info?path=/download") as response:
+                info = json.load(response)
+            self.assertEqual(info["sha256"], hashlib.sha256(b"first").hexdigest())
+            target.write_bytes(b"second")
+            request = Request(self.address + "/download", headers={"If-Match": '"' + info["sha256"] + '"', "Range": "bytes=0-1"})
+            with self.assertRaises(HTTPError) as caught:
+                self.opener.open(request, timeout=10)
+            self.assertEqual(caught.exception.code, 412)
+        finally:
+            self.bench.export_path = None
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,0 +1,28 @@
+name: Bug report
+description: Report a reproducible application or file-format problem
+body:
+  - type: markdown
+    attributes:
+      value: Use synthetic examples where possible. Do not attach credentials or private calibration files.
+  - type: input
+    id: version
+    attributes:
+      label: audioseyX version and operating system
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Minimal example and relevant log excerpt

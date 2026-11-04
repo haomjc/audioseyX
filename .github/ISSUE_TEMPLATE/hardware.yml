@@ -1,0 +1,26 @@
+name: Hardware evidence
+description: Report receiver-specific observations and verification
+body:
+  - type: input
+    id: hardware
+    attributes:
+      label: Receiver model, firmware, tier and channel layout
+    validations:
+      required: true
+  - type: dropdown
+    id: stage
+    attributes:
+      label: What was actually tested?
+      options:
+        - Read-only discovery and information
+        - Stock microphone capture
+        - Transfer acknowledgement
+        - Normal-playback acoustic verification
+    validations:
+      required: true
+  - type: textarea
+    id: setup
+    attributes:
+      label: Microphone, timing reference, method and results
+    validations:
+      required: true
