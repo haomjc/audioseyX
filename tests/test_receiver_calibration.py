@@ -135,7 +135,16 @@ class NativeMenuSearchTests(unittest.TestCase):
             if m.position=='p1':m.ir*=4
         b=calibrate_receiver(p,d,settings)
         self.assertEqual(a['proposal'],b['proposal'])
-        self.assertEqual(a['search'],b['search'])
+        self.assertEqual(a['fixed_training_target_references_db'],b['fixed_training_target_references_db'])
+        # The selected native controls must be identical. BLAS/FFT buffer
+        # alignment can change only the final few Float64 score bits, notably
+        # on Intel macOS; that is not evidence of held-out data entering fit.
+        for key in ['delay_s','inverted','crossovers_hz','distance_proposal','evaluated_delay_polarity_states',
+                    'linked_crossover_combinations','exact_minimum_over_declared_native_grid']:
+            self.assertEqual(a['search'][key],b['search'][key],key)
+        np.testing.assert_allclose(a['search']['objective'],b['search']['objective'],rtol=1e-12,atol=1e-14)
+        for key in a['search']['group_power_error']:
+            np.testing.assert_allclose(a['search']['group_power_error'][key],b['search']['group_power_error'][key],rtol=1e-12,atol=1e-14)
         self.assertFalse(b['independent_validation']['used_for_design'])
         self.assertGreater(b['independent_validation']['after']['objective'],a['independent_validation']['after']['objective']+1)
 

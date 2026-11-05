@@ -1,6 +1,6 @@
 # OCA replacement status
 
-**audioseyX 0.5.0a5 is not yet a verified replacement for the complete OCA workflow.** Several measurement, analysis and optimization components are implemented; a complete native calibration and normal-playback acoustic result have not been established.
+**audioseyX 0.5.0a6 is not yet a verified replacement for the complete OCA workflow.** Several measurement, analysis and optimization components are implemented; a complete native calibration and normal-playback acoustic result have not been established.
 
 This assessment distinguishes the user's A1 Evo AcoustiX 2026-06-09 package from GSonic Reference. It describes inspected behavior and audioseyX's evidence, rather than an independently measured product comparison.
 

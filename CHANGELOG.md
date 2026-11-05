@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.0a6 — cross-platform native workflow verification
+
+- Keep exact held-out-invariance checks for every selected native distance, level, crossover and polarity, while comparing internal Float64 objective scores at numerical precision on Intel macOS.
+- Preserve strict serialized-coefficient byte checks. Native-menu, auditory and raw-clock functionality from 0.5.0a5 is unchanged.
+
 ## 0.5.0a5 — integrated native menus and auditory/clock workflows
 
 - Combine full-budget minimum-phase EQ with explicit native-menu distance, level, crossover and sub-filter-polarity proposals, retaining raw timing and every retained repeat.
