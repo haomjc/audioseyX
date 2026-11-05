@@ -67,6 +67,42 @@ class HttpWorkflowTests(unittest.TestCase):
             self.assertIn(b'nativeCalibrationSettings',response.read())
         with self.request('/clock.js') as response:
             self.assertIn(b'initClockControls',response.read())
+        with self.request('/verification.js') as response:
+            self.assertIn(b'renderCapabilityAssessment',response.read())
+
+    def test_capability_assessment_and_export_are_offline_and_invalidate_with_the_project(self):
+        project=Project('one position',[Measurement('FL','p0','original',ir=[0,1,0,0])],origin='synthetic')
+        self.bench.set_project(project)
+        with patch('audioseyx.receiver.ReceiverClient.read_info',side_effect=AssertionError('No AVR reads allowed')):
+            with self.request('/api/capabilities') as response:
+                report=json.load(response)
+            self.assertIsNone(report['performance_percentage'])
+            self.assertEqual(report['project_context']['measured_positions'],['p0'])
+            with self.request('/api/capabilities/export',{},self.bench.token) as response:
+                self.assertEqual(json.load(response)['schema'],'audioseyx-capability-assessment-1')
+        self.assertIs(self.bench.project,project)
+        with self.request('/download-capabilities') as response:
+            self.assertEqual(json.load(response)['counts']['interface_blocked'],2)
+        self.bench.set_project(Project('changed',[Measurement('FR','p1','different',ir=[1,0,0])]))
+        with self.assertRaises(HTTPError):self.request('/download-capabilities')
+
+    def test_temporal_comparison_preserves_originals_and_exports_all_repeats(self):
+        import numpy as np
+        from audioseyx.importers import save_project
+        t=np.arange(8000)/8000
+        before=Project('before',[Measurement('FL','p0','first',8000,np.exp(-t/.08)),
+                                 Measurement('FL','p0','repeat',8000,np.exp(-t/.1))],origin='synthetic')
+        after=Project('after',[Measurement('FL','p0','after',8000,np.exp(-t/.04))],origin='synthetic')
+        self.bench.set_project(before)
+        path=Path(self.directory.name)/'after.json';save_project(after,path)
+        with self.request('/api/compare',{'filename':'after.json','data':base64.b64encode(path.read_bytes()).decode()},self.bench.token) as response:
+            report=json.load(response)
+        self.assertIs(self.bench.project,before)
+        self.assertEqual(len(report['rows'][0]['temporal']['before']),2)
+        with self.request('/download-verification') as response:
+            self.assertEqual(json.load(response)['schema'],'audioseyx-playback-comparison-2')
+        self.bench.set_project(after)
+        with self.assertRaises(HTTPError):self.request('/download-verification')
 
     def test_clock_reference_creates_files_without_changing_the_project_or_contacting_receiver(self):
         before=self.bench.project

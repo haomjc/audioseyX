@@ -38,6 +38,8 @@ python -m twine check --strict dist/*.whl dist/*.tar.gz
 
 Public tests do not need legacy numerical tables. Simulated receiver tests use artificial addresses. No test connects to a physical AVR.
 
+The native-workflow benchmark in 0.5.0a7 also exercises complete EQ-stage temporal convolution for all 96 synthetic original records, including holdouts. It checks retention and fixed temporal references/measured support. The packaged Windows build runs this path, so the installed temporal module is exercised as well as unit-tested. Short synthetic recordings correctly leave unsupported late-energy cutoffs unavailable.
+
 ## Three-seat numerical fixture
 
 `--listening-area-benchmark` uses abstract synthetic responses for three measured training seats and a separate held-out point. It checks seat priorities, full XT32 reference dimensionality, returned-filter gain feasibility and exact smooth-risk steps. Passing these assertions does not establish strict numerical convergence or performance in a real row. The recorded report keeps the convergence result explicitly, even when it is false.

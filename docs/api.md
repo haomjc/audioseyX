@@ -55,10 +55,16 @@ The pure-delay example has a peak time of 4 ms after accounting for the original
 | `auditory_balance` | `balance_groups(grid, groups, levels, positions)` | ERB-band robust native-grid relative level matching |
 | `clock_sync` | `estimate_clock(recording, pilot, rate, times)` | Known-pilot affine drift from original recordings |
 | `clock_sync` | `correct_recording(recording, analysis)` | Separate continuous-position raw recording correction |
+| `temporal` | `temporal_profile(measurement)` | Original-IR temporal energy and quality-gated descriptive slopes |
+| `temporal` | `compare_temporal_records(before, after)` | Every retained repeat in a common observed window |
+| `temporal` | `predict_filter_temporal(project, design)` | Complete EQ-stage linear convolution with a frozen original reference |
+| `feature_coverage` | `capability_assessment(project=None)` | Engineering checklist and current project evidence; no performance percentage |
 
 ## Local web API
 
 The web API is an implementation detail of the desktop workflow. It binds to loopback. Write requests require the current session token and an accepted origin. Receiver-changing operations additionally require review within the application. Do not embed the token in public examples or configure an external service around this local API.
+
+`GET /api/capabilities` returns the current development checklist without contacting the receiver. `POST /api/capabilities/export` creates a private downloadable assessment; `POST /api/compare` creates a separate verification JSON report with original-repeat temporal diagnostics. Download paths are `/download-capabilities` and `/download-verification`; changing the project invalidates both. See [temporal verification](temporal-verification.md) for reference, playback-chain, memory and support requirements.
 
 ## CLI
 

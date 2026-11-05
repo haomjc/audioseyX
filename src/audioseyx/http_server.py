@@ -104,6 +104,10 @@ def build_server(bench_factory, home, port=0, open_browser=True):
             target, name, mime = bench.project_path, "measurements.awb", "application/zip"
         elif path == "/download-analysis":
             target, name, mime = bench.analysis_path, "measurement-analysis.json", "application/json"
+        elif path == '/download-verification':
+            target, name, mime = bench.verification_path, 'playback-verification.json', 'application/json'
+        elif path == '/download-capabilities':
+            target, name, mime = bench.capability_path, 'capability-assessment.json', 'application/json'
         elif path == "/download-polarity":
             target,name,mime=bench.polarity_path,"polarity-report.json","application/json"
         elif path == '/download-clock':
@@ -148,6 +152,9 @@ def build_server(bench_factory, home, port=0, open_browser=True):
                 from .layouts import presets
                 from .model import CHANNELS
                 return reply({"presets":presets(),"known_channels":list(CHANNELS),"presets_certify_receiver_support":False})
+            if path == '/api/capabilities':
+                from .feature_coverage import capability_assessment
+                return reply(capability_assessment(bench.project))
             if path == "/api/environment":
                 return reply({"rew": find_rew(), "rew_api": bench.rew.status()})
             if path == "/api/rew/status":
@@ -156,14 +163,14 @@ def build_server(bench_factory, home, port=0, open_browser=True):
                 return reply(bench.rew.measurement_controls())
             if path == "/api/download-info":
                 return reply(download_info(request.args.get("path", ""))[1])
-            if path in ["/download", "/download-project", "/download-analysis", "/download-calibration", "/download-polarity", '/download-clock', '/download-clock-reference']:
+            if path in ["/download", "/download-project", "/download-analysis", "/download-calibration", "/download-polarity", '/download-clock', '/download-clock-reference', '/download-verification', '/download-capabilities']:
                 target, info = download_info(path)
                 expected = request.headers.get("If-Match")
                 if expected and expected != '"' + info["sha256"] + '"':
                     return reply({"error": 'The download changed; restart the download'}, 412)
                 return send_file(target, mimetype=info["mime"], as_attachment=True, download_name=info["filename"],
                                  conditional=True, etag=info["sha256"])
-            asset = {"/": "index.html", "/app.js": "app.js", "/analysis.js": "analysis.js", "/downloads.js": "downloads.js", "/joint.js": "joint.js", "/layouts.js":"layouts.js", "/polarity.js":"polarity.js", "/transfer.js":"transfer.js", '/receiver-calibration.js':'receiver-calibration.js', '/clock.js':'clock.js', "/style.css": "style.css"}.get(path)
+            asset = {"/": "index.html", "/app.js": "app.js", "/analysis.js": "analysis.js", "/downloads.js": "downloads.js", "/joint.js": "joint.js", "/layouts.js":"layouts.js", "/polarity.js":"polarity.js", "/transfer.js":"transfer.js", '/receiver-calibration.js':'receiver-calibration.js', '/clock.js':'clock.js', '/verification.js':'verification.js', "/style.css": "style.css"}.get(path)
             if asset is None:
                 return reply({"error": 'Page not found'}, 404)
             content = (assets / asset).read_bytes()
@@ -245,6 +252,8 @@ def build_server(bench_factory, home, port=0, open_browser=True):
             (bench.home / "benchmark-report.json").write_text(json.dumps(result, ensure_ascii=False, allow_nan=False, indent=2), encoding="utf-8")
         elif path == "/api/compare":
             result = bench.compare(body)
+        elif path == '/api/capabilities/export':
+            result = bench.export_capability_assessment()
         elif path == "/api/analyze":
             result = bench.analyze(body)
         elif path == "/api/polarity":

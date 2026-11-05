@@ -4,9 +4,10 @@ from collections import defaultdict
 import numpy as np
 
 from .dsp import spectrum
+from .temporal import compare_temporal_records
 
 
-def compare_projects(before, after):
+def compare_projects(before, after, *, temporal_memory_mib=128):
     if after.origin == "native_avr" and after.metadata.get("normal_playback_verified") is not True:
         raise ValueError('These are receiver calibration-mode data, not confirmed corrected playback. Verify through the normal playback path; do not treat another calibration sweep as an after-correction measurement.')
     a_groups, b_groups = defaultdict(list), defaultdict(list)
@@ -35,10 +36,16 @@ def compare_projects(before, after):
                      "level_reason": 'Comparable level units and calibration or measurement-chain metadata are recorded' if comparable else 'Comparable units and calibration or chain metadata are missing; only response shape is compared',
                      "ripple_before_db": float(np.std(a)), "ripple_after_db": float(np.std(b)),
                      "shape_delta_rms_db": float(np.sqrt(np.mean((b_shape - a_shape) ** 2))),
-                     "frequency": grid.tolist(), "before": a_shape.tolist(), "after": b_shape.tolist()})
+                     "frequency": grid.tolist(), "before": a_shape.tolist(), "after": b_shape.tolist(),
+                     'temporal': compare_temporal_records(a_rows, b_rows, memory_mib=temporal_memory_mib)})
     if not rows:
         raise ValueError('No matching channel and position has a sufficient common frequency band; check the names')
     demo = before.origin == "synthetic" or after.origin == "synthetic"
-    return {"matched": len(rows), "rows": rows, "after_origin": after.origin,
+    paths = {p.metadata.get('measurement_path_id') for p in [before, after]}
+    normal = (len(paths)==1 and None not in paths and '' not in paths and
+              all(p.metadata.get('normal_playback_verified') is True for p in [before, after]))
+    return {"schema": 'audioseyx-playback-comparison-2', "matched": len(rows), "rows": rows, "after_origin": after.origin,
+            'normal_playback_paths_comparable_in_metadata': normal, 'acoustic_improvement_certified': False,
             "notice": ('This is a synthetic demonstration comparison, not an acoustic measurement.' if demo else 'This compares imported measurements.') +
-            'Repeats are combined by median magnitude within each channel and position. Shape is median-level aligned over the common band. Level changes require comparable units and measurement chains; lower level alone does not prove shorter decay.'}
+            ' Repeats are combined by median magnitude within each channel and position. Shape is median-level aligned over the common band. Temporal diagnostics retain every original repeat with one common observed window. Level changes require comparable units and measurement chains; lower level alone does not prove shorter decay.'+
+            ('' if normal else ' Comparable normal-playback paths are not documented for both projects. These diagnostics alone do not establish correction of the same playback system.')}

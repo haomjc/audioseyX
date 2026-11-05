@@ -252,7 +252,8 @@ def design_project(project, tier, settings, progress=None, *, cancel=None):
         raise ValueError('Native-menu calibration uses a minimum-phase EQ base; arbitrary mixed-phase references remain separate')
     if optimizer == "native_joint":
         from .native_joint import design_native_joint
-        return design_native_joint(project, tier, settings, progress, cancel=cancel)
+        result = design_native_joint(project, tier, settings, progress, cancel=cancel)
+        return attach_temporal_prediction(project, result, settings, cancel=cancel)
     output = []
     for index, channel in enumerate(project.channels):
         if cancel is not None and cancel.is_set():
@@ -280,6 +281,14 @@ def design_project(project, tier, settings, progress=None, *, cancel=None):
                 item['limitations'].append('This output plot shows the EQ FIR stage only; the separate receiver proposal lists any additional native level/distance changes.')
         if result.get('independent_validation'):
             result['independent_validation']['stage']='EQ_FIR_before_receiver_controls; native-menu validation is reported separately'
+    return attach_temporal_prediction(project, result, settings, cancel=cancel)
+
+
+def attach_temporal_prediction(project, result, settings, *, cancel=None):
+    if settings.get('temporal_diagnostics', False):
+        from .temporal import predict_filter_temporal
+        result['temporal_prediction'] = predict_filter_temporal(project, result,
+            memory_mib=float(settings.get('temporal_memory_mib', 128)), cancel=cancel)
     return result
 
 

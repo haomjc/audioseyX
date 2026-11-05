@@ -1,0 +1,673 @@
+{
+  "version": "0.5.0a7",
+  "origin": "synthetic",
+  "hardware_tested": false,
+  "sound_played": false,
+  "all_passed": true,
+  "checks": [
+    {
+      "name": "Complete XT32 fixed-FIR space retained",
+      "passed": true
+    },
+    {
+      "name": "Known five-millisecond shared bass timing",
+      "passed": true
+    },
+    {
+      "name": "Native distance centimetres",
+      "passed": true
+    },
+    {
+      "name": "Discrete same-model level match",
+      "passed": true
+    },
+    {
+      "name": "Exact linked crossover selection retains neutral choice",
+      "passed": true
+    },
+    {
+      "name": "Full native finite-grid search",
+      "passed": true
+    },
+    {
+      "name": "Independent position excluded from all settings selection",
+      "passed": true
+    },
+    {
+      "name": "Three distinct measured training seats",
+      "passed": true
+    },
+    {
+      "name": "All original repeats retained in complete EQ-stage convolution",
+      "passed": true
+    },
+    {
+      "name": "Temporal references and measured support remain fixed",
+      "passed": true
+    },
+    {
+      "name": "Known original-recording clock drift",
+      "passed": true
+    },
+    {
+      "name": "Corrected clock scale",
+      "passed": true
+    },
+    {
+      "name": "No fabricated IR or direct-arrival interpretation",
+      "passed": true
+    }
+  ],
+  "settings": {
+    "optimizer": "native_calibration",
+    "phase_mode": "minimum",
+    "validation_positions": [
+      "p3"
+    ],
+    "timing_confirmed": true,
+    "relative_levels_confirmed": true,
+    "routing_measurements_confirmed": true,
+    "receiver_measurement_context": "native_uncorrected",
+    "receiver_routing_models": [
+      "lr4"
+    ],
+    "receiver_delay_speed_m_s": 300.0,
+    "receiver_max_delay_ms": 6.0,
+    "receiver_delay_penalty": 0.0,
+    "receiver_crossover_candidates_hz": [
+      60.0,
+      80.0,
+      100.0
+    ],
+    "receiver_memory_mib": 1024,
+    "low_hz": 20,
+    "high_hz": 500,
+    "sub_high_hz": 200,
+    "max_boost_db": 3,
+    "max_cut_db": 12,
+    "bass_db": 0.0,
+    "tilt_db_oct": 0.0,
+    "temporal_diagnostics": true
+  },
+  "measurement_sha256": "661ad8df21772c25bb5a1bc7a8d4afe73deae89dd9908da8abecae3d6ec1997e",
+  "receiver_calibration": {
+    "schema": "audioseyx-receiver-calibration-1",
+    "model": "AVR-X3700H",
+    "baseline_snapshot_sha256": "56da3a88195915c1d8b0311938a222a0a322bdb74b841933dde4444c09ea6541",
+    "baseline": {
+      "distances_m": {
+        "FL": 3.0,
+        "FR": 3.0,
+        "C": 3.0,
+        "SLA": 3.0,
+        "SRA": 3.0,
+        "SBL": 3.0,
+        "SBR": 3.0,
+        "TFL": 3.0,
+        "TFR": 3.0,
+        "TRL": 3.0,
+        "TRR": 3.0,
+        "SW1": 3.0
+      },
+      "levels_db": {
+        "FL": 0.0,
+        "FR": 0.0,
+        "C": 0.0,
+        "SLA": 0.0,
+        "SRA": 0.0,
+        "SBL": 0.0,
+        "SBR": 0.0,
+        "TFL": 0.0,
+        "TFR": 0.0,
+        "TRL": 0.0,
+        "TRR": 0.0,
+        "SW1": 0.0
+      },
+      "crossovers_hz": {
+        "FL": 80.0,
+        "FR": 80.0,
+        "C": 80.0,
+        "SLA": 80.0,
+        "SRA": 80.0,
+        "SBL": 80.0,
+        "SBR": 80.0,
+        "TFL": 80.0,
+        "TFR": 80.0,
+        "TRL": 80.0,
+        "TRR": 80.0
+      }
+    },
+    "proposal": {
+      "distances_m": {
+        "FL": 3.0,
+        "FR": 3.0,
+        "C": 3.0,
+        "SLA": 3.0,
+        "SRA": 3.0,
+        "SBL": 3.0,
+        "SBR": 3.0,
+        "TFL": 3.0,
+        "TFR": 3.0,
+        "TRL": 3.0,
+        "TRR": 3.0,
+        "SW1": 4.5
+      },
+      "levels_db": {
+        "FL": -0.5,
+        "FR": 0.5,
+        "C": 0.0,
+        "SLA": 0.0,
+        "SRA": 0.0,
+        "SBL": 0.0,
+        "SBR": 0.0,
+        "TFL": 0.0,
+        "TFR": 0.0,
+        "TRL": 0.0,
+        "TRR": 0.0,
+        "SW1": 0.0
+      },
+      "crossovers_hz": {
+        "FL": 80.0,
+        "FR": 80.0,
+        "C": 80.0,
+        "SLA": 80.0,
+        "SRA": 80.0,
+        "SBL": 80.0,
+        "SBR": 80.0,
+        "TFL": 80.0,
+        "TFR": 80.0,
+        "TRL": 80.0,
+        "TRR": 80.0
+      },
+      "inverted_outputs": []
+    },
+    "profile": {
+      "distance_min_m": 0.0,
+      "distance_max_m": 18.0,
+      "distance_spread_lt_m": 6.0,
+      "distance_step_m": 0.01,
+      "level_min_db": -12.0,
+      "level_max_db": 12.0,
+      "level_step_db": 0.5,
+      "crossovers_hz": [
+        40.0,
+        60.0,
+        80.0,
+        90.0,
+        100.0,
+        110.0,
+        120.0,
+        150.0,
+        180.0,
+        200.0,
+        250.0
+      ],
+      "distance_delay_speed_m_s": 300.0,
+      "distance_delay_evidence": "observed_user_provided_reference_package_model; current_firmware_not_verified"
+    },
+    "search": {
+      "objective": 0.0,
+      "delay_s": -0.005,
+      "inverted": false,
+      "crossovers_hz": {
+        "FL/FR": 80.0,
+        "C": 80.0,
+        "SLA/SRA": 80.0,
+        "SBL/SBR": 80.0,
+        "TFL/TFR": 80.0,
+        "TRL/TRR": 80.0
+      },
+      "group_power_error": {
+        "FL/FR": 0.0,
+        "C": 0.0,
+        "SLA/SRA": 0.0,
+        "SBL/SBR": 0.0,
+        "TFL/TFR": 0.0,
+        "TRL/TRR": 0.0
+      },
+      "distance_proposal": {
+        "distances_m": {
+          "FL": 3.0,
+          "FR": 3.0,
+          "C": 3.0,
+          "SLA": 3.0,
+          "SRA": 3.0,
+          "SBL": 3.0,
+          "SBR": 3.0,
+          "TFL": 3.0,
+          "TFR": 3.0,
+          "TRL": 3.0,
+          "TRR": 3.0,
+          "SW1": 4.5
+        },
+        "common_offset_m": 0.0,
+        "sub_distance_delta_m": 1.5,
+        "sub_relative_delay_ms": -5.0,
+        "distance_delay_speed_m_s": 300.0,
+        "distance_delay_model_verified": false
+      },
+      "baseline": {
+        "objective": 0.06784086668623188,
+        "crossovers_hz": {
+          "FL/FR": 80.0,
+          "C": 80.0,
+          "SLA/SRA": 80.0,
+          "SBL/SBR": 80.0,
+          "TFL/TFR": 80.0,
+          "TRL/TRR": 80.0
+        },
+        "group_power_error": {
+          "FL/FR": 0.06784086668623188,
+          "C": 0.06784086668623188,
+          "SLA/SRA": 0.06784086668623188,
+          "SBL/SBR": 0.06784086668623188,
+          "TFL/TFR": 0.06784086668623188,
+          "TRL/TRR": 0.06784086668623188
+        }
+      },
+      "evaluated_delay_polarity_states": 722,
+      "time_integration_observable": true,
+      "linked_crossover_combinations": 729,
+      "exact_minimum_over_declared_native_grid": true,
+      "objective_scope": "fixed_FIRs_and_explicit_power_response_model; global_acoustic_optimality_not_claimed",
+      "baseline_scope": "proposed_levels_and_selected_main_distance_basis_with_original_crossovers_and_zero_extra_sub_delay"
+    },
+    "evaluation": {
+      "objective": 0.0,
+      "crossovers_hz": {
+        "FL/FR": 80.0,
+        "C": 80.0,
+        "SLA/SRA": 80.0,
+        "SBL/SBR": 80.0,
+        "TFL/TFR": 80.0,
+        "TRL/TRR": 80.0
+      },
+      "group_power_error": {
+        "FL/FR": 0.0,
+        "C": 0.0,
+        "SLA/SRA": 0.0,
+        "SBL/SBR": 0.0,
+        "TFL/TFR": 0.0,
+        "TRL/TRR": 0.0
+      }
+    },
+    "distance_basis": {
+      "method": "preserve",
+      "receiver_speed_m_s": 300.0,
+      "physical_speed_m_s": 343.0,
+      "relative_distances_rescaled": false,
+      "hardware_verified": false
+    },
+    "fixed_training_target_references_db": {
+      "FL": -8.326672684688674e-17,
+      "FR": -8.326672684688674e-17,
+      "C": -2.720122786696343e-16,
+      "SLA": -2.720122786696343e-16,
+      "SRA": -2.720122786696343e-16,
+      "SBL": -2.720122786696343e-16,
+      "SBR": -2.720122786696343e-16,
+      "TFL": -2.720122786696343e-16,
+      "TFR": -2.720122786696343e-16,
+      "TRL": -2.720122786696343e-16,
+      "TRR": -2.720122786696343e-16
+    },
+    "target_reference_rule": "common baseline reference within confirmed same-model groups; frozen before gain/menu selection",
+    "original_evaluation": {
+      "objective": 0.06954373239944345,
+      "crossovers_hz": {
+        "FL/FR": 80.0,
+        "C": 80.0,
+        "SLA/SRA": 80.0,
+        "SBL/SBR": 80.0,
+        "TFL/TFR": 80.0,
+        "TRL/TRR": 80.0
+      },
+      "group_power_error": {
+        "FL/FR": 0.07712329880314273,
+        "C": 0.06784086668623188,
+        "SLA/SRA": 0.06784086668623188,
+        "SBL/SBR": 0.06784086668623188,
+        "TFL/TFR": 0.06784086668623188,
+        "TRL/TRR": 0.06784086668623188
+      }
+    },
+    "independent_validation": {
+      "positions": [
+        "p3"
+      ],
+      "used_for_design": false,
+      "references_from_training": true,
+      "renormalized_after_design": false,
+      "before": {
+        "objective": 0.06954373239944345,
+        "crossovers_hz": {
+          "FL/FR": 80.0,
+          "C": 80.0,
+          "SLA/SRA": 80.0,
+          "SBL/SBR": 80.0,
+          "TFL/TFR": 80.0,
+          "TRL/TRR": 80.0
+        },
+        "group_power_error": {
+          "FL/FR": 0.07712329880314273,
+          "C": 0.06784086668623188,
+          "SLA/SRA": 0.06784086668623188,
+          "SBL/SBR": 0.06784086668623188,
+          "TFL/TFR": 0.06784086668623188,
+          "TRL/TRR": 0.06784086668623188
+        }
+      },
+      "after": {
+        "objective": 0.0,
+        "crossovers_hz": {
+          "FL/FR": 80.0,
+          "C": 80.0,
+          "SLA/SRA": 80.0,
+          "SBL/SBR": 80.0,
+          "TFL/TFR": 80.0,
+          "TRL/TRR": 80.0
+        },
+        "group_power_error": {
+          "FL/FR": 0.0,
+          "C": 0.0,
+          "SLA/SRA": 0.0,
+          "SBL/SBR": 0.0,
+          "TFL/TFR": 0.0,
+          "TRL/TRR": 0.0
+        }
+      }
+    },
+    "bass_routing_headroom_proxy": {
+      "rows": [
+        {
+          "name": "baseline",
+          "maximum_induced_amplitude_bound": 11.999998763520313,
+          "frequency_hz": 1.46484375
+        },
+        {
+          "name": "proposed",
+          "maximum_induced_amplitude_bound": 11.999998763520313,
+          "frequency_hz": 1.46484375
+        }
+      ],
+      "maximum_bound_growth_db": 0.0,
+      "lfe_input_gain_assumed_db": 0.0,
+      "notice": "Conservative coherent-input routing/FIR/output-level proxy. This excludes unknown AVR gain order, internal attenuation, driver distortion and available acoustic output; it is not a clipping or SPL certificate."
+    },
+    "auditory_balance": {
+      "method": "ERB_spaced_response_energy_Huber_native_grid_dynamic_programming",
+      "trim_delta_db": {
+        "FL": -0.5,
+        "FR": 0.5,
+        "SLA": 0.0,
+        "SRA": 0.0,
+        "SBL": 0.0,
+        "SBR": 0.0,
+        "TFL": 0.0,
+        "TFR": 0.0,
+        "TRL": 0.0,
+        "TRR": 0.0
+      },
+      "groups": [
+        {
+          "channels": [
+            "FL",
+            "FR"
+          ],
+          "trim_delta_db": {
+            "FL": -0.5,
+            "FR": 0.5
+          },
+          "band_imbalance_rms_before_db": 0.49999999999999956,
+          "band_imbalance_rms_after_db": 1.0021518190040523e-15,
+          "objective": 5e-09,
+          "zero_sum_delta_db": 0.0,
+          "global_discrete_minimum": true,
+          "native_step_db": 0.5
+        },
+        {
+          "channels": [
+            "SLA",
+            "SRA"
+          ],
+          "trim_delta_db": {
+            "SLA": 0.0,
+            "SRA": 0.0
+          },
+          "band_imbalance_rms_before_db": 0.0,
+          "band_imbalance_rms_after_db": 0.0,
+          "objective": 0.0,
+          "zero_sum_delta_db": 0.0,
+          "global_discrete_minimum": true,
+          "native_step_db": 0.5
+        },
+        {
+          "channels": [
+            "SBL",
+            "SBR"
+          ],
+          "trim_delta_db": {
+            "SBL": 0.0,
+            "SBR": 0.0
+          },
+          "band_imbalance_rms_before_db": 0.0,
+          "band_imbalance_rms_after_db": 0.0,
+          "objective": 0.0,
+          "zero_sum_delta_db": 0.0,
+          "global_discrete_minimum": true,
+          "native_step_db": 0.5
+        },
+        {
+          "channels": [
+            "TFL",
+            "TFR",
+            "TRL",
+            "TRR"
+          ],
+          "trim_delta_db": {
+            "TFL": 0.0,
+            "TFR": 0.0,
+            "TRL": 0.0,
+            "TRR": 0.0
+          },
+          "band_imbalance_rms_before_db": 0.0,
+          "band_imbalance_rms_after_db": 0.0,
+          "objective": 0.0,
+          "zero_sum_delta_db": 0.0,
+          "global_discrete_minimum": true,
+          "native_step_db": 0.5
+        }
+      ],
+      "band_centres_hz": [
+        200.00000000000003,
+        248.71514810796367,
+        302.96430577470016,
+        363.3761329342554,
+        430.6507048856971,
+        505.567625032746,
+        588.995059225421,
+        681.8997963970985,
+        785.3584520834833,
+        900.569944654144,
+        1028.869388835944,
+        1171.743567531817,
+        1330.8481612282253,
+        1508.0269346522457,
+        1705.333103020589,
+        1925.0531254807925,
+        2169.7332014720605,
+        2442.2087770556955,
+        2745.6374031457167,
+        3083.535326413407,
+        3459.818236895107,
+        3878.8466445021313,
+        4345.476410273053,
+        4865.1150179438555
+      ],
+      "analysis_band_hz": [
+        200.0,
+        5000.0
+      ],
+      "all_positions_and_repeats_retained": true,
+      "hardware_verified": false,
+      "loudness_standard_certification": false,
+      "notice": "Relative matching of confirmed same-model speakers. This response-energy method is not an ISO loudness calculation or a verified reproduction of GSonic. The full measured FFT grid contributes to the auditory bands; raw impulses are unchanged."
+    },
+    "analysis_band_hz": [
+      20.0,
+      20000.0
+    ],
+    "training_positions": [
+      "p0",
+      "p1",
+      "p2"
+    ],
+    "validation_positions": [
+      "p3"
+    ],
+    "measurement_records_used": 72,
+    "original_ir_modified": false,
+    "assumptions": {
+      "measurement_context": "native_uncorrected",
+      "output_level_and_distance_order_verified": false,
+      "distance_delay_speed_m_s": 300.0,
+      "distance_delay_conversion_verified": false,
+      "crossover_model": "lr4",
+      "distance_basis_method": "preserve",
+      "physical_speed_m_s": 343.0,
+      "routing_models_considered": [
+        "lr4"
+      ],
+      "native_filter_reconstruction_verified": false
+    },
+    "hardware_verified": false,
+    "receiver_settings_written": false,
+    "notice": "Modeled native-menu proposal using every measured FFT bin in the declared analysis band and every retained repeat. The finite-grid search is exact for its stated conditional model and fixed FIRs. Receiver routing, capture gain/delay path and native reconstruction remain unverified. Polarity is a filter choice, not a diagnosis of reversed wiring."
+  },
+  "temporal_prediction": {
+    "stage": "individual_output_EQ_FIR_only",
+    "records": 96,
+    "all_original_records_retained": true,
+    "fixed_references_and_support": true,
+    "hardware_verified": false
+  },
+  "clock": {
+    "known_drift_ppm": 350.0,
+    "before": {
+      "method": "known_repeated_pilot_full_recording_affine_clock",
+      "sample_rate_hz": 8000,
+      "recording_sha256": "5ad1f5b6dc7d73c554a12aeaef8fbd3f0c2c5cf0f35c089995941193b014b728",
+      "recording_samples": 32000,
+      "recorded_seconds_per_reference_second": 1.000349999876191,
+      "estimated_drift_ppm": 349.99987619110937,
+      "fit_standard_error_ppm": 0.00012258851168598297,
+      "fitted_offset_s": 0.03500786248025278,
+      "maximum_fit_residual_samples": 2.307068314166827e-06,
+      "anchor_recording_time_s": 0.43514786244304654,
+      "pilots": [
+        {
+          "expected_time_s": 0.4,
+          "observed_time_s": 0.43514786244304654,
+          "normalized_correlation": 0.9868493087233132,
+          "competing_peak_correlation": 0.02521252386151988,
+          "fit_residual_samples": 9.853851068442054e-08
+        },
+        {
+          "expected_time_s": 1.3,
+          "observed_time_s": 1.3354628624450164,
+          "normalized_correlation": 0.9655694616672308,
+          "competing_peak_correlation": 0.02440547073956755,
+          "fit_residual_samples": 1.0057217281200792e-06
+        },
+        {
+          "expected_time_s": 2.2,
+          "observed_time_s": 2.2357778619194897,
+          "normalized_correlation": 0.9805404586079461,
+          "competing_peak_correlation": 0.0252272376347692,
+          "fit_residual_samples": -2.307068314166827e-06
+        },
+        {
+          "expected_time_s": 3.1,
+          "observed_time_s": 3.136092862246796,
+          "normalized_correlation": 0.9741495983052991,
+          "competing_peak_correlation": 0.024332933602905563,
+          "fit_residual_samples": 1.2028031903810188e-06
+        }
+      ],
+      "pilot_sha256": "3a11a19062b108422cf8dc10a3ae3b5b3a4a6d0810c3847399ccda5d03b3d80b",
+      "raw_recording_modified": false,
+      "direct_arrival_identified": false,
+      "notice": "Clock scale fitted from at least three known repeated pilots. The offset can include latency and a consistent room reflection; it is not a direct-arrival measurement. Stationary signal/path and a stable clock are assumptions. Existing deconvolved IRs cannot establish this fit."
+    },
+    "after": {
+      "method": "known_repeated_pilot_full_recording_affine_clock",
+      "sample_rate_hz": 8000,
+      "recording_sha256": "d93c6470412a71ebd2ab9532ade0a0e23de632b124334c64f403d60142cf94e2",
+      "recording_samples": 31988,
+      "recorded_seconds_per_reference_second": 1.0000000001237679,
+      "estimated_drift_ppm": 0.00012376788482981738,
+      "fit_standard_error_ppm": 2.2313842733239736e-09,
+      "fitted_offset_s": 0.034987754291737616,
+      "maximum_fit_residual_samples": 3.907985046680551e-11,
+      "anchor_recording_time_s": 0.43498775434124415,
+      "pilots": [
+        {
+          "expected_time_s": 0.4,
+          "observed_time_s": 0.43498775434124415,
+          "normalized_correlation": 0.996243806685406,
+          "competing_peak_correlation": 0.024743527292623153,
+          "fit_residual_samples": -5.329070518200751e-12
+        },
+        {
+          "expected_time_s": 1.3,
+          "observed_time_s": 1.3349877544526392,
+          "normalized_correlation": 0.9962438749713661,
+          "competing_peak_correlation": 0.024743525902794973,
+          "fit_residual_samples": 2.6645352591003757e-11
+        },
+        {
+          "expected_time_s": 2.2,
+          "observed_time_s": 2.234987754564022,
+          "normalized_correlation": 0.9962439432477918,
+          "competing_peak_correlation": 0.024743526020900932,
+          "fit_residual_samples": -3.907985046680551e-11
+        },
+        {
+          "expected_time_s": 3.1,
+          "observed_time_s": 3.1349877546754206,
+          "normalized_correlation": 0.9962440115342982,
+          "competing_peak_correlation": 0.024743524441565107,
+          "fit_residual_samples": 1.7763568394002505e-11
+        }
+      ],
+      "pilot_sha256": "3a11a19062b108422cf8dc10a3ae3b5b3a4a6d0810c3847399ccda5d03b3d80b",
+      "raw_recording_modified": false,
+      "direct_arrival_identified": false,
+      "notice": "Clock scale fitted from at least three known repeated pilots. The offset can include latency and a consistent room reflection; it is not a direct-arrival measurement. Stationary signal/path and a stable clock are assumptions. Existing deconvolved IRs cannot establish this fit."
+    },
+    "mapping": {
+      "method": "continuous_phase_Kaiser_windowed_sinc",
+      "filter_taps": 128,
+      "kaiser_beta": 14.0,
+      "output_samples": 31988,
+      "input_samples": 32000,
+      "output_sample_rate_hz": 8000.0,
+      "output_start_time_s": 0.00015224841105487,
+      "original_start_time_s": 0.0,
+      "anchor_recording_time_preserved": true,
+      "resampling_ratio": 0.9996501225808623,
+      "estimated_working_memory_mib": 24.488189697265625,
+      "peak_absolute_output": 0.9985040984754938,
+      "zero_padding_at_recording_edges": true,
+      "deconvolution_performed": false,
+      "notice": "A separate complete raw recording is resampled at continuous fractional positions. Original audio is retained. Finite sinc precision and edge padding are reported; this is not a lossless transform or an impulse-response deconvolution."
+    }
+  },
+  "runtime_seconds": 8.960538399998768,
+  "environment": {
+    "python": "3.13.12",
+    "numpy": "2.3.5",
+    "scipy": "1.17.0"
+  },
+  "notice": "Abstract known-solution native-menu and raw-recording fixtures. Native grid exactness is conditional on fixed FIRs, the proposed trim state and the declared model; it is not global acoustic optimality, OCA/GSonic equality or hardware validation."
+}

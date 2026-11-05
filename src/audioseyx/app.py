@@ -29,6 +29,7 @@ from .archive import save_archive
 from .analysis import analyze_measurement, room_modes
 from .comparison import compare_projects
 from .compat import compatibility_status
+from .feature_coverage import capability_assessment
 
 
 def public_design(design):
@@ -54,6 +55,8 @@ class Workbench:
         self.events = []
         self.export_path = None
         self.analysis_path = None
+        self.verification_path = None
+        self.capability_path = None
         self.polarity_report = None
         self.polarity_path = None
         self.rew = RewClient()
@@ -99,12 +102,16 @@ class Workbench:
         return {"application_id": "audioseyx-workbench", "version": __version__, "compatibility": compatibility_status(),
                 "features":{"full_complex_joint_fir":True,"native_synthesis_models":True,"per_frequency_fdw":True,
                             "variable_channel_layouts":True,"read_only_receiver_settings":True,
-                            'native_receiver_calibration':True,'auditory_band_balance':True,'raw_clock_correction':True},
+                            'native_receiver_calibration':True,'auditory_band_balance':True,'raw_clock_correction':True,
+                            'temporal_verification':True,'capability_assessment':True},
+                'capability_assessment': capability_assessment(self.project),
                 "project": self.project.summary() if self.project else None,
                 "design": public_design(self.design), "joint": self.joint, "job": dict(self.job),
                 "receiver": self.receiver, "events": self.events[-15:],
                 "export_available": self.export_path is not None,
                 "analysis_available": self.analysis_path is not None,
+                'verification_available': self.verification_path is not None,
+                'capability_report_available': self.capability_path is not None,
                 "polarity":self.polarity_report,
                 'clock':self.clock_result,
                 "target_curve": {"name": self.target_curve["name"], "points": len(self.target_curve["frequency"])} if self.target_curve else None}
@@ -128,6 +135,8 @@ class Workbench:
         self.joint = None
         self.export_path = None
         self.analysis_path = None
+        self.verification_path = None
+        self.capability_path = None
         self.polarity_report = None
         self.polarity_path = None
         self.transfer_plan = None
@@ -403,6 +412,7 @@ class Workbench:
     def compare(self, body):
         if not self.project:
             raise ValueError('Import the before-correction measurements first')
+        project = self.project
         filename = Path(str(body.get("filename", "after.json"))).name
         directory = self.home / "uploads" / secrets.token_hex(4)
         directory.mkdir()
@@ -412,7 +422,23 @@ class Workbench:
             raise ValueError('The verification file is empty or exceeds the size limit')
         path.write_bytes(raw)
         after = import_file(path, "verification_file")
-        return compare_projects(self.project, after)
+        result = compare_projects(project, after, temporal_memory_mib=float(body.get('temporal_memory_mib', 128)))
+        if self.project is not project:
+            raise ValueError('The project changed during comparison; compare again')
+        report_path = self.home/'exports'/(project.id+'-verification-'+secrets.token_hex(4)+'.json')
+        report_path.write_text(json.dumps(result, ensure_ascii=False, allow_nan=False, indent=2), encoding='utf-8')
+        self.verification_path = report_path
+        return result
+
+    def export_capability_assessment(self):
+        project = self.project
+        result = capability_assessment(project)
+        report_path = self.home/'exports'/('capabilities-'+secrets.token_hex(4)+'.json')
+        report_path.write_text(json.dumps(result, ensure_ascii=False, allow_nan=False, indent=2), encoding='utf-8')
+        if self.project is not project:
+            raise ValueError('The project changed during assessment; generate the report again')
+        self.capability_path = report_path
+        return result
 
     def analyze(self, body):
         if not self.project:

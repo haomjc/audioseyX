@@ -38,7 +38,7 @@ def run_native_workflow_benchmark(progress=None):
               'receiver_delay_speed_m_s':300.,'receiver_max_delay_ms':6.,'receiver_delay_penalty':0.,
               'receiver_crossover_candidates_hz':[60.,80.,100.],'receiver_memory_mib':1024,
               'low_hz':20,'high_hz':500,'sub_high_hz':200,'max_boost_db':3,'max_cut_db':12,
-              'bass_db':0.,'tilt_db_oct':0.}
+              'bass_db':0.,'tilt_db_oct':0.,'temporal_diagnostics':True}
     result=design_project(project,'XT32',settings,progress)
     native=result['receiver_calibration'];proposal=native['proposal'];search=native['search']
     checks=[{'name':'Complete XT32 fixed-FIR space retained','passed':sum(len(i['taps']) for i in result['channels'])==195586},
@@ -49,6 +49,15 @@ def run_native_workflow_benchmark(progress=None):
             {'name':'Full native finite-grid search','passed':search['exact_minimum_over_declared_native_grid']},
             {'name':'Independent position excluded from all settings selection','passed':not native['independent_validation']['used_for_design']},
             {'name':'Three distinct measured training seats','passed':result['settings']['listening_area_resolution']['required_seats_measured']}]
+    temporal=result['temporal_prediction']
+    complete_temporal=(len(temporal['records'])==len(rows) and
+                      all(r['available'] and r['measurement_index']==i for i,r in enumerate(temporal['records'])))
+    fixed_references=all(r['before']['anchor_time_s']==r['after']['anchor_time_s'] and
+                         r['before']['relative_window_s']==r['after']['relative_window_s']
+                         for r in temporal['records'])
+    checks.extend([
+        {'name':'All original repeats retained in complete EQ-stage convolution','passed':complete_temporal},
+        {'name':'Temporal references and measured support remain fixed','passed':fixed_references}])
     clock_rate=8000;duration=.04;times=np.array([.4,1.3,2.2,3.1]);ppm=350.
     recording_time=np.arange(32000)/clock_rate;reference=(recording_time-.035)/(1+ppm*1e-6)
     recording=np.zeros(len(recording_time))
@@ -68,6 +77,9 @@ def run_native_workflow_benchmark(progress=None):
     return {'version':__version__,'origin':'synthetic','hardware_tested':False,'sound_played':False,
             'all_passed':all(c['passed'] for c in checks),'checks':checks,'settings':settings,
             'measurement_sha256':fingerprint.hexdigest(),'receiver_calibration':native,
+            'temporal_prediction':{'stage':temporal['stage'],'records':len(temporal['records']),
+                                   'all_original_records_retained':complete_temporal,'fixed_references_and_support':fixed_references,
+                                   'hardware_verified':False},
             'clock':{'known_drift_ppm':ppm,'before':before,'after':after,'mapping':mapping},
             'runtime_seconds':time.monotonic()-started,
             'environment':{'python':platform.python_version(),'numpy':np.__version__,'scipy':scipy.__version__},

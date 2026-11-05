@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0a7 — temporal evidence and capability coverage
+
+- Retain every before/after original-IR repeat for observed-window temporal energy fractions and quality-gated descriptive EDT/T20/T30 slopes, including 20–150 Hz and octave-band analysis-filter ringing references.
+- Separate gain changes, unknown timebases, shorter recordings and native calibration sweeps from evidence of improved corrected playback. Export immutable verification reports and invalidate them on project changes.
+- Add opt-in complete FIR/IR linear-convolution diagnostics with a frozen original reference and original measured support; refuse guessed multirate reconstruction and insufficient memory.
+- Expose a ten-row engineering capability checklist in the UI and offline API, including actual missing seats/outputs. Development counts are not Dirac performance percentages; native mixed-phase synthesis and ART support routes remain unverified/unavailable.
+- Keep all filter-design coefficients and native control generation unchanged.
+
 ## 0.5.0a6 — cross-platform native workflow verification
 
 - Keep exact held-out-invariance checks for every selected native distance, level, crossover and polarity, while comparing internal Float64 objective scores at numerical precision on Intel macOS.
