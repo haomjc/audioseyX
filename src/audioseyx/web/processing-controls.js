@@ -7,6 +7,9 @@ function restoreProcessingControls(current){
  const saved=current.saved_design_settings;
  if(!saved)return;
  const controls={
+  'native-refinement-rounds':'receiver_refinement_rounds','native-refinement-step':'receiver_refinement_step_db',
+  'native-repeat-weighting':'receiver_repeat_weighting','native-repeat-floor':'receiver_repeat_weight_floor',
+  'native-main-uncertainty':'receiver_main_uncertainty_db','native-sub-uncertainty':'receiver_sub_uncertainty_db','native-timing-uncertainty':'receiver_timing_uncertainty_ms',
   'tier':'tier','low-hz':'low_hz','high-hz':'high_hz','sub-high-hz':'sub_high_hz','boost-db':'max_boost_db',
   'cut-db':'max_cut_db','bass-db':'bass_db','tilt-db':'tilt_db_oct','phase-high-hz':'phase_high_hz','delay-ms':'delay_ms','crossover-hz':'crossover_hz',
   'joint-phase-target':'joint_phase_target','joint-delay':'joint_delay_ms','joint-risk':'position_risk','joint-iterations':'joint_iterations',
@@ -17,7 +20,7 @@ function restoreProcessingControls(current){
   'native-position-risk':'receiver_position_risk','native-analysis-low':'receiver_analysis_low_hz','native-analysis-high':'receiver_analysis_high_hz',
   'native-measurement-context':'receiver_measurement_context','curve-control-mode':'receiver_curve_control_mode','curve-risk':'receiver_curve_risk','curve-risk-temperature':'receiver_curve_risk_temperature'};
  for(const [id,key] of Object.entries(controls)){if($(id)&&saved[key]!==undefined)$(id).value=Array.isArray(saved[key])?saved[key].join(', '):saved[key]}
- for(const [id,key] of [['temporal-diagnostics','temporal_diagnostics'],['native-auditory-balance','receiver_auditory_balance'],['native-time-search','receiver_time_crossover_search'],['native-sub-level-search','receiver_sub_level_search']]){
+ for(const [id,key] of [['native-eq-refinement','receiver_eq_refinement'],['temporal-diagnostics','temporal_diagnostics'],['native-auditory-balance','receiver_auditory_balance'],['native-time-search','receiver_time_crossover_search'],['native-sub-level-search','receiver_sub_level_search']]){
   if(saved[key]!==undefined)$(id).checked=saved[key]===true;
  }
  const mode=saved.optimizer==='native_calibration'?'receiver':saved.optimizer==='native_joint'?'joint':saved.phase_mode||'minimum';

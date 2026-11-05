@@ -10,6 +10,7 @@ from audioseyx.exporter import export_bundle
 import tempfile
 
 package = Path(audioseyx.__file__).resolve().parent
+assert (package/'web'/'native-refinement.js').is_file()
 if "site-packages" not in package.parts:
     raise SystemExit("This check must import a wheel installed in site-packages")
 if any((package / name).exists() for name in ["native_tables.json", "channel_addresses.json"]):

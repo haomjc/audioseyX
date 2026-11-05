@@ -19,6 +19,28 @@ from audioseyx.model import Measurement, Project
 
 
 class HttpWorkflowTests(unittest.TestCase):
+    def test_saved_run_download_and_recipe_are_local_integrity_checked_operations(self):
+        from test_saved_controls import project
+        from audioseyx.dsp import design_project
+        from audioseyx.exporter import export_bundle
+        from audioseyx.design_history import write_receipt
+        p=project();self.bench.set_project(p)
+        design=design_project(p,'MultEQ',{})
+        archive=export_bundle(p,design,self.bench.home/'exports'/'history-http')
+        receipt=write_receipt(self.bench.home,p,{},'complete',design=design,archive=archive)
+        with self.request('/api/design-history') as response:
+            rows=json.load(response)['runs']
+        self.assertTrue(any(row['id']==receipt['id'] and row['dataset_matches'] for row in rows))
+        with self.request('/api/design-history/recipe',{'id':receipt['id']},self.bench.token) as response:
+            result=json.load(response)
+        self.assertFalse(result['receiver_written']);self.assertFalse(result['automatic_calculation_started'])
+        with self.request('/api/design-history/export?id='+receipt['id']) as response:
+            self.assertEqual(response.read(),archive.read_bytes())
+        archive.write_bytes(b'changed')
+        with self.assertRaises(HTTPError) as error:
+            self.request('/api/design-history/export?id='+receipt['id'])
+        self.assertEqual(error.exception.code,400)
+
     @classmethod
     def setUpClass(cls):
         cls.directory = tempfile.TemporaryDirectory(dir=Path.cwd())
@@ -59,6 +81,9 @@ class HttpWorkflowTests(unittest.TestCase):
         with self.request("/api/state") as response:
             state = json.load(response)
         self.assertIn("transfer", state)
+        self.assertTrue(state['features']['native_eq_refinement'])
+        with self.request('/native-refinement.js') as response:
+            self.assertIn(b'loadDesignHistory',response.read())
         with self.request("/joint.js") as response:
             self.assertIn(b"renderJointEvaluation",response.read())
         with self.request("/transfer.js") as response:

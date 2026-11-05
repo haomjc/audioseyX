@@ -7,6 +7,7 @@ from scipy import signal
 
 from .curves import target_offset
 from .routing import crossover_responses
+from .measurement_robustness import repeat_confidence, uncertainty_cases
 
 
 @dataclass
@@ -17,6 +18,19 @@ class ScenarioPairs:
     main_route: np.ndarray
     sub_route: np.ndarray
     target: np.ndarray
+    main_weights: tuple = ()
+    sub_weights: tuple = ()
+
+    def probabilities(self):
+        main = self.main_weights or tuple(np.full(len(self.main_indices), 1/len(self.main_indices)))
+        sub = self.sub_weights or tuple(np.full(len(self.sub_indices), 1/len(self.sub_indices)))
+        return main, sub
+
+    def weighted(self):
+        mw, sw = self.probabilities()
+        for main, a in zip(self.main_samples(), mw):
+            for bass, b in zip(self.sub_samples(), sw):
+                yield main, bass, a*b
 
     def main_samples(self):
         for i in self.main_indices:
@@ -43,6 +57,8 @@ def power_scenarios(grid, snapshot, settings, groups, levels, positions, selecte
     subs=[c for c in grid.items if c.startswith('SW')]
     if len(subs)!=1:raise ValueError('The coupled native power model requires one measured physical subwoofer')
     sub=subs[0];context=settings['receiver_measurement_context']
+    probabilities,_=repeat_confidence(grid,settings)
+    uncertainties=uncertainty_cases(settings)
     if context not in ['native_uncorrected','uncrossed_playback_eq_off']:
         raise ValueError('An explicit uncrossed measurement context is required')
     low=float(settings.get('receiver_analysis_low_hz',20))
@@ -97,10 +113,17 @@ def power_scenarios(grid, snapshot, settings, groups, levels, positions, selecte
                         main_indices=[None] if is_lfe else grid.groups.get((source,position),[])
                         if not main_indices or not sub_indices:raise ValueError('Every retained output/position response is required')
                         count=len(main_indices)*len(sub_indices)
-                        row={'group':group_index,'crossover_hz':hz,'source':source,'position':position,
-                             'routing_model':model,'mass':mass/len(group['channels'])/len(models),'repeat_scenarios':count}
-                        pairs=ScenarioPairs(conditioned,tuple(main_indices),tuple(sub_indices),main_route,sub_route,target)
-                        yield row,f,source_weight,pairs
+                        mw=(1.,) if is_lfe else tuple(probabilities[main_indices])
+                        sw=tuple(probabilities[sub_indices])
+                        for case_index,case in enumerate(uncertainties):
+                            row={'group':group_index,'crossover_hz':hz,'source':source,'position':position,
+                                 'routing_model':model,'mass':mass/len(group['channels'])/len(models)*case['mass'],
+                                 'repeat_scenarios':count,'uncertainty_case':case_index}
+                            main_factor=10**(case['main_gain_db']/20)
+                            bass_factor=10**(case['sub_gain_db']/20)*np.exp(-2j*np.pi*f*case['relative_sub_delay_ms']/1000)
+                            pairs=ScenarioPairs(conditioned,tuple(main_indices),tuple(sub_indices),
+                                                main_route*main_factor,sub_route*bass_factor,target,mw,sw)
+                            yield row,f,source_weight,pairs
 
 
 def _row_moments(row,f,w,pairs):
@@ -108,15 +131,13 @@ def _row_moments(row,f,w,pairs):
     # complex cross terms are retained; this is not a synthesized mean IR.
     m2=np.zeros(len(f));ma2=m2.copy();mc=np.zeros(len(f),complex);mac=mc.copy();mc2=mc.copy()
     s2=m2.copy();s4=m2.copy();sm=mc.copy();spm=mc.copy();ss=mc.copy()
-    for main in pairs.main_samples():
+    main_weights,sub_weights=pairs.probabilities()
+    for main,probability in zip(pairs.main_samples(),main_weights):
         power=np.abs(main)**2;conjugate=np.conj(main)
-        m2+=power;ma2+=(power-1)**2;mc+=conjugate;mac+=(power-1)*conjugate;mc2+=conjugate**2
-    for bass in pairs.sub_samples():
+        m2+=probability*power;ma2+=probability*(power-1)**2;mc+=probability*conjugate;mac+=probability*(power-1)*conjugate;mc2+=probability*conjugate**2
+    for bass,probability in zip(pairs.sub_samples(),sub_weights):
         power=np.abs(bass)**2
-        s2+=power;s4+=power**2;sm+=bass;spm+=power*bass;ss+=bass**2
-    nm=len(pairs.main_indices);ns=len(pairs.sub_indices)
-    m2/=nm;ma2/=nm;mc/=nm;mac/=nm;mc2/=nm
-    s2/=ns;s4/=ns;sm/=ns;spm/=ns;ss/=ns
+        s2+=probability*power;s4+=probability*power**2;sm+=probability*bass;spm+=probability*power*bass;ss+=probability*bass**2
     c=np.asarray([w@ma2,w@((4*m2-2)*s2),w@s4])
     lo=w*4*mac*sm;hi=w*4*mc*spm;twice=w*2*mc2*ss
     if not np.isfinite(c).all() or not np.isfinite(lo).all() or not np.isfinite(hi).all() or not np.isfinite(twice).all():
@@ -171,7 +192,7 @@ def build_native_delay_table(grids, snapshot, settings_by_curve, groups, levels,
         models=settings_by_curve[name].get('receiver_routing_models') or [settings_by_curve[name].get('crossover_model','lr4')]
         if not isinstance(models,(list,tuple)) or not 1<=len(models)<=2 or len(set(models))!=len(models) or any(m not in ['lr4','bw2_lr4'] for m in models):
             raise ValueError('Choose one or both explicit crossover slope models')
-        rows_per_curve[name]=len(models)*sum(len(g['choices_hz'] if selected is None else selected[g['id']])*len(g['channels'])*len(positions) for g in groups)
+        rows_per_curve[name]=len(uncertainty_cases(settings_by_curve[name]))*len(models)*sum(len(g['choices_hz'] if selected is None else selected[g['id']])*len(g['channels'])*len(positions) for g in groups)
     total=sum(rows_per_curve.values())
     work_states=int(next(iter(settings_by_curve.values())).get('receiver_native_state_batch',256))
     if not 16<=work_states<=2048:raise ValueError('Native state batches must contain 16-2048 states')
@@ -212,7 +233,7 @@ def build_native_delay_table(grids, snapshot, settings_by_curve, groups, levels,
             'native_delay_transform':{'method':'full_frequency_moment_DTFT_on_native_grid_using_Bluestein_ZoomFFT',
                                       'frequency_bins_used':len(frequency),'native_delay_points':len(delays),
                                       'response_frequency_bins_omitted':0,'FIR_taps_removed':0,
-                                      'repeat_aggregation':'exact_complete_Cartesian_second_fourth_and_complex_cross_moments'}}
+                                      'repeat_aggregation':'exact_positive_weighted_complete_Cartesian_second_fourth_and_complex_cross_moments'}}
 
 
 def direct_power_evaluation(grids, snapshot, settings_by_curve, groups, proposal, positions, weights, crossovers, cancel=None):
@@ -226,7 +247,7 @@ def direct_power_evaluation(grids, snapshot, settings_by_curve, groups, proposal
         for row,_,w,pairs in power_scenarios(grid,snapshot,settings,groups,proposal['levels_db'],positions,selected):
             if cancel is not None and cancel.is_set():raise InterruptedError('Direct native forward check cancelled')
             loss=0.
-            for main,bass in pairs():loss+=float(w@((np.abs(main+bass)**2-1)**2))/row['repeat_scenarios']
+            for main,bass,probability in pairs.weighted():loss+=probability*float(w@((np.abs(main+bass)**2-1)**2))
             if not np.isfinite(loss):raise ValueError('The direct physical power evaluation is not finite')
             rows.append({**row,'curve_profile':name});losses.append(loss)
     table={'rows':rows,'groups':groups,'curve_weights':weights}

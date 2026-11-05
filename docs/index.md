@@ -7,7 +7,7 @@ audioseyX is a local acoustic workbench for measurement import, room analysis an
 Start with the synthetic 7.1.4 demo to explore the interface without connecting a receiver. Inspect response and decay, design a filter for a selected tier, and export the actual truncated filter WAVs and reports.
 
 :::{important}
-This is the **0.5.0a9 experimental preview**. X3700H information/settings reads and Float capture transport have been checked. Microphone compensation, normal-playback reconstruction and transfer remain unverified. Public distributions do not include legacy native compatibility tables with unresolved redistribution permission. Offline analysis, design and general WAV export work without them.
+This is the **0.5.0a10 experimental preview**. X3700H information/settings reads and Float capture transport have been checked. Microphone compensation, normal-playback reconstruction and transfer remain unverified. Public distributions do not include legacy native compatibility tables with unresolved redistribution permission. Offline analysis, design and general WAV export work without them.
 :::
 
 ## Find what you need
@@ -36,6 +36,7 @@ native-integration
 integrated-calibration
 calibration-curves
 coupled-native
+robust-refinement
 dirac-coverage
 temporal-verification
 oca-comparison

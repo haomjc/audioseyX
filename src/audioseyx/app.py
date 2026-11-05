@@ -32,6 +32,7 @@ from .compat import compatibility_status
 from .feature_coverage import capability_assessment
 from .calibration_curves import design_report
 from .saved_controls import make_saved_controls, load_saved_controls
+from .design_history import write_receipt
 
 
 def public_design(design):
@@ -112,7 +113,8 @@ class Workbench:
                             "variable_channel_layouts":True,"read_only_receiver_settings":True,
                             'native_receiver_calibration':True,'auditory_band_balance':True,'raw_clock_correction':True,
                             'temporal_verification':True,'capability_assessment':True,'independent_native_curves':True,
-                            'coupled_native_controls':True,'data_linked_saved_controls':True},
+                            'coupled_native_controls':True,'data_linked_saved_controls':True,
+                            'native_eq_refinement':True,'measurement_robustness':True,'design_history':True},
                 'capability_assessment': capability_assessment(self.project),
                 "project": self.project.summary() if self.project else None,
                 "design": public_design(self.design), "joint": self.joint, "job": dict(self.job),
@@ -241,18 +243,27 @@ class Workbench:
                             saved=None
                             self.log('Processing controls could not be committed; the completed design remains available.')
                     self.design, self.joint, self.export_path = design, joint, path
+                    self.record_design_run(project,settings,'complete',design=design,archive=path)
                     self.saved_design_settings=saved
                     self.saved_controls_restored=False
                     self.job = {"status": "complete", "progress": 100, "message": 'Design and export complete'}
                 self.log('Completed channel designs, available candidate encoding and reports. Nothing has been written to the receiver.')
             except InterruptedError as error:
+                self.record_design_run(project,settings,'cancelled',error=error)
                 self.job={"status":"cancelled","kind":"design","progress":0,"message":str(error)}
                 self.log(str(error))
             except Exception as error:
+                self.record_design_run(project,settings,'failed',error=error)
                 self.job = {"status": "failed", "kind":"design", "progress": 0, "message": str(error)}
                 self.log('Design incomplete: ' + str(error))
         threading.Thread(target=run, daemon=True).start()
         return dict(self.job)
+
+    def record_design_run(self,project,settings,status,**details):
+        try:
+            write_receipt(self.home,project,settings,status,**details)
+        except (ValueError,TypeError,OSError,RecursionError):
+            self.log('The local run receipt could not be saved. Existing results and exports are retained.')
 
     def cancel_design(self):
         with self.lock:

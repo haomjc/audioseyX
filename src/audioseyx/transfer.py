@@ -313,6 +313,8 @@ def prepare_transfer(project, design, template, receiver):
                'receiver_settings_proposal': receiver_proposal,
                'receiver_model_assumptions': design.get('receiver_calibration', {}).get('assumptions') if receiver_proposal else None,
                'receiver_control_selection': copy.deepcopy(design.get('receiver_calibration', {}).get('control_selection')) if receiver_proposal else None,
+               'receiver_measurement_robustness': copy.deepcopy(design.get('receiver_calibration', {}).get('measurement_robustness')) if receiver_proposal else None,
+               'receiver_eq_refinement': copy.deepcopy(design.get('receiver_calibration', {}).get('eq_refinement')) if receiver_proposal else None,
                'headroom_compensated_by_channel_levels': bool(not settings_only or receiver_proposal),
                "coefficient_quantization": {
                    "maximum_absolute_error": max(row["maximum_absolute_error"] for row in precision_rows),

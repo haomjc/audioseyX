@@ -54,7 +54,7 @@ def _huber(value, width):
     return np.where(magnitude <= width, .5 * value**2, width * (magnitude - .5 * width))
 
 
-def _group_observations(grid, group, positions, bank, low, high, offsets):
+def _group_observations(grid, group, positions, bank, low, high, offsets, record_weights=None):
     covered=[m for m in grid.project.measurements if m.channel in group]
     if any(low < (float(m.frequency[0]) if m.ir is None else 0) or
            high > (float(m.frequency[-1]) if m.ir is None else m.sample_rate/2) for m in covered) or any(high>grid.items[c]['sample_rate']/2 for c in group):
@@ -66,7 +66,9 @@ def _group_observations(grid, group, positions, bank, low, high, offsets):
             indices=grid.groups.get((channel,position),[])
             if not indices:raise ValueError('Auditory balance is missing an output/position response')
             powers=np.asarray([np.abs(grid.corrected(i))**2 for i in indices])
-            per_channel.append(10*np.log10(np.maximum((powers@bank.T).mean(axis=0),1e-30))+float(offsets.get(channel,0)))
+            weights=np.full(len(indices),1/len(indices)) if record_weights is None else np.asarray(record_weights)[indices]
+            weights=weights/weights.sum()
+            per_channel.append(10*np.log10(np.maximum(weights@(powers@bank.T),1e-30))+float(offsets.get(channel,0)))
         observations.append(per_channel);masses.append(mass)
     observed=np.asarray(observations).transpose(1,0,2)
     weight=np.asarray(masses,dtype=float);weight/=weight.sum()
@@ -118,7 +120,7 @@ def balance_groups(grid, groups, levels_db, positions, *, low=200., high=5000., 
 
 def balance_curve_groups(grids, groups, levels_db, positions, curve_weights, *, low=200., high=5000.,
                          step_db=.5, max_change_db=3., minimum_db=-12., maximum_db=12., huber_db=2.,
-                         response_offsets_db=None, output_maximum_db=None, cancel=None):
+                         response_offsets_db=None, output_maximum_db=None, record_weights=None, cancel=None):
     """One exact zero-sum trim state for a weighted sum of complete curve costs."""
     names=list(grids)
     if not names or set(names)!=set(curve_weights):raise ValueError('Every auditory curve requires an explicit weight')
@@ -136,7 +138,8 @@ def balance_curve_groups(grids, groups, levels_db, positions, curve_weights, *, 
         if not isinstance(group,(list,tuple)) or len(group)<2 or len(set(group))!=len(group) or used.intersection(group) or any(c not in grids[names[0]].items or c.startswith('SW') for c in group):
             raise ValueError('Shared auditory groups require distinct confirmed measured main outputs')
         used.update(group)
-        observations={c:_group_observations(grids[c],group,positions,banks[c][0],low,high,offsets) for c in names}
+        observations={c:_group_observations(grids[c],group,positions,banks[c][0],low,high,offsets,
+                                          None if record_weights is None else record_weights[c]) for c in names}
         options=[];costs=[]
         for index,channel in enumerate(group):
             current=float(levels_db.get(channel,0))

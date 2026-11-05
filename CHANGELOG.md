@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0a10 — EQ/control feedback, measurement robustness and local run recovery
+
+- Add an opt-in complete minimum-phase EQ/native-control block search with frozen training targets, protected gain envelopes, coefficient reserve checks and strictly improving accepted steps. Retain a trace of rejected and accepted trials; held-out seats never select candidates.
+- Feed positive repeat-consistency weights into auditory trim balancing and exact Cartesian power moments. Preserve equal weights when fewer than three repeats cannot establish a majority preference.
+- Evaluate the complete centre/endpoint gain and relative-delay uncertainty ensemble without dropping curves, routing models, records or analysis bins. Check memory before native-delay table allocation; report that finite cases are declared assumptions.
+- Save atomic, dataset-bound run receipts for successful, failed and cancelled designs. Verify archive integrity before downloading a saved run or restoring safe interface controls. Reset consent flags and require matching imported targets.
+- Expose the controls and reports in the English interface and documentation. Extend the full-layout synthetic native workflow benchmark with two-curve robust EQ/control checks. Physical receiver reconstruction, playback and acoustic benefit remain unverified.
+
 ## 0.5.0a9 — coupled native bass planning and restart-safe processing
 
 - Select shared sub level, delay, polarity and linked crossovers with LFE participation, for one target or weighted Flat/Reference targets. Keep conditional exactness separate from joint FIR/main-trim optimality and hardware validity.

@@ -44,4 +44,14 @@ Version 0.5.0a8 adds a complete independent Reference target with another 195,58
 
 ## Three-seat numerical fixture
 
+Version 0.5.0a10 extends the native workflow benchmark to 27 checks. Its robust
+fixture retains both complete 195,586-tap XT32 curves, two routing models,
+three training seats and a held-out point. All 27 declared gain/timing cases
+participate in positive-weighted Cartesian repeat moments. A complete EQ/native
+control block step is accepted only when it improves the frozen-target training
+objective. Direct physical sums check training and held-out moment scores.
+Separate regression cases perturb excluded responses and independently finite
+difference the nested-risk and response sensitivities. Local run recovery tests
+reject changed archives, foreign datasets, mismatched targets and edited receipts.
+
 `--listening-area-benchmark` uses abstract synthetic responses for three measured training seats and a separate held-out point. It checks seat priorities, full XT32 reference dimensionality, returned-filter gain feasibility and exact smooth-risk steps. Passing these assertions does not establish strict numerical convergence or performance in a real row. The recorded report keeps the convergence result explicitly, even when it is false.

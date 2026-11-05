@@ -1,6 +1,7 @@
 let nativeCalibrationProject='',nativeCalibrationResult='';
 
 function initReceiverCalibrationControls(){
+ initNativeRefinementControls();
  $('phase-mode').addEventListener('change',()=>{
   $('native-calibration-options').classList.toggle('hidden',$('phase-mode').value!=='receiver');
  });
@@ -10,7 +11,7 @@ function nativeCalibrationSettings(){
  if($('phase-mode').value!=='receiver')return {};
  if(!state?.features?.coupled_native_controls)throw new Error('Restart audioseyX before using this version of coupled native planning.');
  const groups=$('native-same-model').value.trim();
- return {optimizer:'native_calibration',
+ return {optimizer:'native_calibration',...nativeRefinementSettings(),
   receiver_control_engine:'coupled',
   relative_levels_confirmed:$('native-reference-confirmed').checked,
   routing_measurements_confirmed:$('native-reference-confirmed').checked,
@@ -63,5 +64,5 @@ function renderReceiverCalibration(design){
  const perCurve=curveRows?`<div class="table-scroll"><table><thead><tr><th>Curve at the common settings</th><th>Individual model objective / before → selected</th></tr></thead><tbody>${curveRows}</tbody></table></div>`:'';
  const transform=search?.native_delay_transform;
  const evidence=transform?`<details><summary>Full-data solver evidence</summary><p>${transform.frequency_bins_used.toLocaleString()} frequency bins contribute to ${transform.native_delay_points.toLocaleString()} native delay points; no FIR taps or response frequency bins were removed. Direct physical-response gap: ${(result.direct_forward_check?.power_moment_absolute_gap??0).toExponential(3)}.</p><p>Sub level candidates: ${search.sub_level_candidates_db[0].toFixed(1)} to ${search.sub_level_candidates_db.at(-1).toFixed(1)} dB, ${search.sub_level_candidates_db.length} grid values, with ${search.coefficient_compensation_reserved_db.toFixed(1)} dB coefficient compensation reserved.</p></details>`:'';
- $('native-calibration-detail').innerHTML=`${selected}${score}${perCurve}${auditory}${held}<div class="table-scroll"><table><thead><tr><th>Output</th><th>Distance</th><th>Level before codec compensation</th><th>Crossover</th><th>Polarity</th></tr></thead><tbody>${rows}</tbody></table></div>${headroom}${evidence}<p class="hint">${esc(result.notice)} These model objectives are not measured acoustic error or standardized loudness. Proposed controls remain unchanged until included in a reviewed receiver transfer.</p>`;
+ $('native-calibration-detail').innerHTML=`${selected}${nativeRefinementReport(result)}${score}${perCurve}${auditory}${held}<div class="table-scroll"><table><thead><tr><th>Output</th><th>Distance</th><th>Level before codec compensation</th><th>Crossover</th><th>Polarity</th></tr></thead><tbody>${rows}</tbody></table></div>${headroom}${evidence}<p class="hint">${esc(result.notice)} These model objectives are not measured acoustic error or standardized loudness. Proposed controls remain unchanged until included in a reviewed receiver transfer.</p>`;
 }

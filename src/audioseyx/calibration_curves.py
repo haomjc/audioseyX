@@ -115,11 +115,11 @@ def design_calibration_curves(project, tier, settings, progress=None, *, cancel=
         if progress:progress(45+round(number*.4),'Reference / '+message)
     reference = design_project(project, tier, reference_settings, reference_progress, cancel=cancel)
     if deferred:
-        from .joint_curve_controls import calibrate_joint_curves
+        from .native_refinement import refine_native_curves
         selected={'Flat':flat,'Reference':reference} if mode=='joint' else {'Flat':flat}
         planning={**flat['settings'],'optimizer':'native_calibration','receiver_control_engine':'coupled'}
         if mode=='primary':planning['receiver_curve_weights']={'Flat':1.}
-        calibration=calibrate_joint_curves(project,selected,planning,headroom_curves={'Flat':flat,'Reference':reference},progress=progress,cancel=cancel)
+        calibration=refine_native_curves(project,selected,planning,headroom_curves={'Flat':flat,'Reference':reference},progress=progress,cancel=cancel)
         flat['settings'].update(optimizer='native_calibration',receiver_control_engine='coupled')
         flat['receiver_calibration']=calibration
         charts=calibration.pop('routed_charts',[])
@@ -164,7 +164,7 @@ def design_calibration_curves(project, tier, settings, progress=None, *, cancel=
         'control_curve_weights':selection.get('curve_weights',{'Flat':1.}),
         'curve_slots': copy.deepcopy(CURVE_SPECS),
         'receiver_mapping_hardware_verified': False,
-        'notice': ('Two complete static minimum-phase EQ designs with common receiver controls. Both weighted targets select the native sub-level/distance/polarity/crossover proposal, including LFE, after shared main ERB trim selection. This is conditional on the fixed FIRs and declared model; hardware reconstruction remains unverified. '
+        'notice': ('Two complete static minimum-phase EQ designs with common receiver controls. Both weighted targets select the native sub-level/distance/polarity/crossover proposal, including LFE, after shared main ERB trim selection. Optional EQ/control refinement accepts only feasible improving full-response candidates. Each native-grid search is conditional on its FIRs and declared model; hardware reconstruction remains unverified. '
                    if joint else 'Two independent static minimum-phase EQ designs. Receiver controls are selected using Flat; Reference is forward-evaluated with those controls fixed. ') +
                   'Static target selection is not Dynamic EQ or automatic loudness compensation.'}
     curve_designs(flat)

@@ -11,6 +11,7 @@ FORBIDDEN_NAMES = {"native_tables.json", "channel_addresses.json", "native-codec
 FORBIDDEN_PARTS = {".git", ".private", ".native-profiles", "UserData", "用户数据", "__pycache__"}
 FORBIDDEN_SUFFIXES = {".exe", ".ady", ".oca", ".awb", ".npz", ".npy", ".log", ".pyc"}
 WHEEL_REQUIRED = {"audioseyx/__init__.py", "audioseyx/__main__.py", "audioseyx/synthetic_hashes.json",
+                  "audioseyx/web/native-refinement.js", "audioseyx/native_refinement.py", "audioseyx/measurement_robustness.py", "audioseyx/design_history.py",
                   "audioseyx/web/index.html", "audioseyx/web/app.js", "audioseyx/web/analysis.js",
                   "audioseyx/web/downloads.js", "audioseyx/web/joint.js", "audioseyx/web/layouts.js", "audioseyx/web/polarity.js", "audioseyx/web/transfer.js", "audioseyx/web/receiver-calibration.js", "audioseyx/web/clock.js", "audioseyx/web/verification.js", "audioseyx/web/curve-profiles.js", "audioseyx/web/processing-controls.js", "audioseyx/web/style.css"}
 

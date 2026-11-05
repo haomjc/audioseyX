@@ -148,6 +148,15 @@ def build_server(bench_factory, home, port=0, open_browser=True):
         if request.method == "GET":
             if path == "/api/state":
                 return reply({**bench.state(), "transfer": bench.transfer_state()})
+            if path == '/api/design-history':
+                from .design_history import history
+                return reply(history(bench.home,bench.project))
+            if path == '/api/design-history/export':
+                from .design_history import verified_archive
+                target=verified_archive(bench.home,request.args.get('id'))
+                return send_file(target,mimetype='application/zip',as_attachment=True,download_name='audioseyX-saved-design.zip')
+            if path == '/native-refinement.js':
+                return Response((assets/'native-refinement.js').read_bytes(),content_type='text/javascript; charset=utf-8')
             if path == "/api/layouts":
                 from .layouts import presets
                 from .model import CHANNELS
@@ -224,6 +233,12 @@ def build_server(bench_factory, home, port=0, open_browser=True):
             result = bench.start_design(body)
         elif path == "/api/design/cancel":
             result = bench.cancel_design()
+        elif path == '/api/design-history/recipe':
+            from .design_history import restore_recipe
+            with bench.lock:
+                if bench.job.get('status')=='running':raise ValueError('Wait for the current job before restoring processing controls')
+                result=restore_recipe(bench.home,bench.project,body.get('id'),
+                    {'Flat':bench.target_curve,'Reference':bench.reference_target_curve})
         elif path == '/api/clock/reference':
             result = bench.create_clock_reference(body)
         elif path == '/api/clock/correct':

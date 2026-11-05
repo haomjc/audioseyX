@@ -14,6 +14,7 @@ from .headroom import curve_headroom
 from .receiver_constraints import (receiver_profile, snapshot_fingerprint, distance_basis,
                                    quantized_distance_proposal, validate_receiver_proposal)
 from .spectral_grid import SpectralGrid, position_weights
+from .measurement_robustness import robustness_report, repeat_confidence
 
 
 def checked_curve_weights(settings, names=('Flat','Reference')):
@@ -75,7 +76,7 @@ def build_curve_table(grids, snapshot, settings_by_curve, groups, levels, positi
                                      selected=selected,budget=budget,cancel=cancel,progress=progress)
 
 
-def calibrate_joint_curves(project, curves, settings, *, headroom_curves=None, progress=None, cancel=None):
+def calibrate_joint_curves(project, curves, settings, *, headroom_curves=None, progress=None, cancel=None, frozen_references=None):
     if unsafe_capture_indices(project):raise ValueError('Unverified capture addresses cannot enter coupled native planning')
     if set(curves) not in [{'Flat'},set(CURVE_SPECS)] or any(c.get('project_id')!=project.id for c in curves.values()):
         raise ValueError('Coupled controls require complete designs from this measurement project')
@@ -130,6 +131,11 @@ def calibrate_joint_curves(project, curves, settings, *, headroom_curves=None, p
     positions=position_weights(train,settings)
     same_model=settings.get('same_model_groups',project.metadata.get('same_model_groups',[]))
     references={name:_target_references(grid,snapshot,settings,mains,same_model) for name,grid in grids.items()}
+    if frozen_references is not None:
+        if set(frozen_references)!=set(curves) or any(set(frozen_references[n])!=set(references[n]) or
+                not np.isfinite(list(frozen_references[n].values())).all() for n in curves):
+            raise ValueError('Refinement requires complete finite frozen training target references')
+        references={n:dict(frozen_references[n]) for n in curves}
     balance=None
     if settings.get('receiver_auditory_balance',True) and same_model:
         offsets=controls if context=='native_uncorrected' else {c:0. for c in controls}
@@ -137,7 +143,7 @@ def calibrate_joint_curves(project, curves, settings, *, headroom_curves=None, p
             low=float(settings.get('auditory_low_hz',200)),high=float(settings.get('auditory_high_hz',5000)),
             step_db=profile['level_step_db'],max_change_db=float(settings.get('auditory_max_change_db',3)),
             minimum_db=profile['level_min_db'],maximum_db=profile['level_max_db'],response_offsets_db=offsets,
-            output_maximum_db=output_upper,cancel=cancel)
+            output_maximum_db=output_upper,record_weights={n:repeat_confidence(g,settings)[0] for n,g in grids.items()},cancel=cancel)
         for c,delta in balance['trim_delta_db'].items():controls[c]+=delta
     if any(controls[c]>output_upper[c]+1e-8 for c in mains):
         raise ValueError('A shared main level leaves insufficient coefficient compensation; reduce boost or revise baseline levels')
@@ -147,6 +153,7 @@ def calibrate_joint_curves(project, curves, settings, *, headroom_curves=None, p
             'baseline':{'distances_m':snapshot['distances_m'],'levels_db':snapshot['levels_db'],'crossovers_hz':snapshot.get('crossovers',{})},
             'control_selection':selection,'auditory_balance':balance,'distance_basis':basis,
             'coefficient_gain_reservation':reservation,
+            'measurement_robustness':robustness_report(grids,settings),
             'fixed_training_target_references_db':references['Flat'],'curve_target_references_db':references,
             'target_reference_rule':'Per-curve baseline references, common within confirmed same-model groups; frozen from training before gain/menu selection',
             'training_positions':sorted(positions),'validation_positions':sorted(validation),
@@ -157,6 +164,7 @@ def calibrate_joint_curves(project, curves, settings, *, headroom_curves=None, p
                            'distance_delay_conversion_verified':False,'distance_basis_method':basis['method'],
                            'routing_models_considered':settings.get('receiver_routing_models') or [settings.get('crossover_model','lr4')],
                            'native_filter_reconstruction_verified':False}}
+    result['measurement_robustness']['used_in_routed_objective']=bool(search_enabled)
     if not search_enabled:
         if basis['relative_distances_rescaled']:
             fitted=quantized_distance_proposal(base_distances,mains[0],0.,basis['receiver_speed_m_s'],profile)

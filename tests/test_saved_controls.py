@@ -83,6 +83,10 @@ class SavedControlsTests(unittest.TestCase):
             self.assertEqual(bench.job['status'],'failed')
             self.assertIs(bench.design,previous);self.assertEqual(path.read_bytes(),saved)
             self.assertEqual(list(Path(directory).glob('controls-*.tmp.json')),[])
+            from audioseyx.design_history import history
+            receipts=history(bench.home,bench.project)
+            self.assertEqual({row['status'] for row in receipts['runs']},{'complete','failed','cancelled'})
+            self.assertEqual(receipts['invalid_receipts'],0)
 
 
 if __name__=='__main__':unittest.main()

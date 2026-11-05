@@ -280,8 +280,8 @@ def design_project(project, tier, settings, progress=None, *, cancel=None):
             'channels':[evaluate_channel_filter([m for m in project.measurements if m.channel==item['channel'] and m.position in validation],item,settings) for item in output]}
     if optimizer == 'native_calibration':
         if engine=='coupled':
-            from .joint_curve_controls import calibrate_joint_curves
-            result['receiver_calibration']=calibrate_joint_curves(project,{'Flat':result},settings,progress=progress,cancel=cancel)
+            from .native_refinement import refine_native_curves
+            result['receiver_calibration']=refine_native_curves(project,{'Flat':result},settings,progress=progress,cancel=cancel)
         else:
             from .receiver_calibration import calibrate_receiver
             result['receiver_calibration'] = calibrate_receiver(project, result, settings, progress=progress, cancel=cancel)

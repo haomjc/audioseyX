@@ -16,6 +16,13 @@ FIELDS=frozenset('''tier optimizer phase_mode low_hz high_hz sub_high_hz max_boo
     fdw_cycles fdw_reference fdw_start_hz large_channels crossover_model bass_mode lfe_lowpass_hz
     receiver_control_engine receiver_curve_control_mode receiver_curve_weights receiver_curve_risk
     receiver_curve_risk_temperature receiver_lfe_priority receiver_sub_level_search receiver_sub_level_min_db
+    receiver_eq_refinement receiver_refinement_rounds receiver_refinement_step_db receiver_refinement_smoothing_octave
+    receiver_repeat_weighting receiver_repeat_weight_floor receiver_repeat_scale_db
+    receiver_main_uncertainty_db receiver_sub_uncertainty_db receiver_timing_uncertainty_ms
+    receiver_routing_models receiver_risk_temperature receiver_curve_risk_temperature receiver_crossover_change_penalty
+    receiver_delay_penalty receiver_polarity_penalty receiver_sub_level_penalty
+    auditory_low_hz auditory_high_hz auditory_max_change_db spatial_statistics position_weights
+    same_model_groups receiver_crossover_groups
     receiver_sub_level_max_db receiver_native_state_batch receiver_max_delay_ms receiver_delay_speed_m_s
     receiver_memory_mib receiver_auditory_balance receiver_time_crossover_search receiver_crossover_candidates_hz
     receiver_measurement_context receiver_analysis_low_hz receiver_analysis_high_hz receiver_position_risk
