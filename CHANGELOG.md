@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.0a11 — portable saved-run validation
+
+- Compare resolved archive paths in recovery tests so macOS temporary-directory aliases identify the same verified file. Runtime archive containment and integrity checks remain enforced.
+
 ## 0.5.0a10 — EQ/control feedback, measurement robustness and local run recovery
 
 - Add an opt-in complete minimum-phase EQ/native-control block search with frozen training targets, protected gain envelopes, coefficient reserve checks and strictly improving accepted steps. Retain a trace of rejected and accepted trials; held-out seats never select candidates.

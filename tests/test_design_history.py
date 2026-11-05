@@ -27,7 +27,7 @@ class DesignHistoryTests(unittest.TestCase):
             for key in ['timing_confirmed','relative_levels_confirmed','apply_receiver_adjustments']:
                 self.assertFalse(restored['settings'][key])
             self.assertNotIn('token',restored['settings']);self.assertNotIn('receiver_snapshot',restored['settings'])
-            self.assertEqual(verified_archive(home,receipt['id']),archive)
+            self.assertEqual(verified_archive(home,receipt['id']),archive.resolve())
             foreign=copy.deepcopy(p);foreign.measurements[0].ir[40]*=2
             with self.assertRaisesRegex(ValueError,'different measurements'):restore_recipe(home,foreign,receipt['id'])
             archive.write_bytes(b'changed')
