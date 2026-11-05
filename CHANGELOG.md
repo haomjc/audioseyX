@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.0a14 — deterministic local receipt order
+
+- Assign a serialized workspace commit sequence to new design receipts while preserving their observed wall-clock timestamps. Equal or reversed Windows timestamps no longer reorder the latest completed/cancelled/failed results. Legacy receipts remain readable; known sequences and legacy records have deterministic display order.
+- Cover identical clocks, clock rollback and concurrent receipt commits with deterministic tests instead of clock sleeps.
+
 ## 0.5.0a13 — read-only receiver evidence and explicit local input checks
 
 - Read the receiver's actual speaker menu before choosing exposed basic settings queries. Stop on the first settings read failure; hidden feature names and timeouts never become claims about writable DSP or independent EQ.

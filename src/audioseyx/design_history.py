@@ -5,12 +5,15 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import threading
 import time
 import uuid
 
 from . import __version__
 from .calibration_curves import curve_designs, fir_fingerprint
 from .saved_controls import project_signature, safe_controls
+
+_RECEIPT_COMMIT_LOCK=threading.Lock()
 
 
 def file_sha256(path):
@@ -57,15 +60,23 @@ def write_receipt(home, project, settings, status, *, design=None, archive=None,
             refinement=design.get('receiver_calibration', {}).get('eq_refinement'),
             training_positions=design.get('training_positions', []),
             validation_positions=design.get('validation_positions', []))
-    record['receipt_sha256'] = _payload_digest(record)
     directory = home/'design-history'
     directory.mkdir(parents=True, exist_ok=True)
     temporary = directory/(record['id']+'.tmp')
-    try:
-        temporary.write_text(json.dumps(record, allow_nan=False, indent=2), encoding='utf-8')
-        temporary.replace(directory/(record['id']+'.json'))
-    finally:
-        temporary.unlink(missing_ok=True)
+    with _RECEIPT_COMMIT_LOCK:
+        committed=[]
+        for path in directory.glob('*.json'):
+            try:committed.append(read_receipt(home,path.stem))
+            except (ValueError,OSError,TypeError,RecursionError):continue
+        # Wall-clock resolution can be coarser than consecutive commits. Keep
+        # the observed timestamp intact and assign a separate workspace order.
+        record['commit_sequence']=max([len(committed)]+[r.get('commit_sequence') or 0 for r in committed])+1
+        record['receipt_sha256'] = _payload_digest(record)
+        try:
+            temporary.write_text(json.dumps(record, allow_nan=False, indent=2), encoding='utf-8')
+            temporary.replace(directory/(record['id']+'.json'))
+        finally:
+            temporary.unlink(missing_ok=True)
     return record
 
 
@@ -81,6 +92,9 @@ def read_receipt(home, identity):
         raise ValueError('The design receipt failed its integrity check')
     if document.get('status') not in ('complete','failed','cancelled') or not isinstance(document.get('created_ns'),int):
         raise ValueError('Invalid design receipt fields')
+    sequence=document.get('commit_sequence')
+    if sequence is not None and (isinstance(sequence,bool) or not isinstance(sequence,int) or sequence<1):
+        raise ValueError('Invalid receipt commit sequence')
     return document
 
 
@@ -91,11 +105,11 @@ def history(home, project, limit=50):
     for path in directory.glob('*.json'):
         try:
             record = read_receipt(home, path.stem)
-            records.append({k:record.get(k) for k in ('id','created_ns','software_version','status','error','training_positions','validation_positions')}
+            records.append({k:record.get(k) for k in ('id','created_ns','commit_sequence','software_version','status','error','training_positions','validation_positions')}
                 | dict(dataset_matches=record['project_signature'] == signature, export_available=bool(record.get('archive'))))
         except (ValueError, OSError, TypeError, RecursionError):
             invalid += 1
-    records.sort(key=lambda row: row['created_ns'], reverse=True)
+    records.sort(key=lambda row:(row.get('commit_sequence') or 0,row['created_ns'],row['id']),reverse=True)
     return dict(runs=records[:limit], total_runs=len(records), invalid_receipts=invalid,
         notice='Restoring controls never restores measurement consent or writes the receiver. Original factory EQ coefficients are not backed up by these run receipts.')
 
