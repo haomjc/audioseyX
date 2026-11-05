@@ -4,7 +4,7 @@
 
 audioseyX brings measurement files, REW integration, room analysis and Audyssey-aware filter design into one local interface. It preserves individual microphone positions and original response timing, evaluates the actual truncated filters, and keeps numerical predictions separate from hardware and acoustic verification.
 
-**Status: 0.5.0a12, an experimental public preview.** PyPI publishing and the Read the Docs site are being configured; a local build does not establish that either service is live. Read-only information, speaker settings and Float capture transport have been checked on an X3700H. Microphone compensation, normal-playback reconstruction and transfer remain unverified. This project is independent of Audyssey, Denon, Marantz and Dirac.
+**Status: 0.5.0a13, an experimental public preview.** PyPI publishing and the Read the Docs site are being configured; a local build does not establish that either service is live. Read-only information, speaker settings and Float capture transport have been checked on an X3700H. Microphone compensation, normal-playback reconstruction and transfer remain unverified. This project is independent of Audyssey, Denon, Marantz and Dirac.
 
 ## What works offline
 
@@ -29,6 +29,8 @@ audioseyX brings measurement files, REW integration, room analysis and Audyssey-
 See [EQ feedback and robust measurement design](docs/robust-refinement.md) for monotone EQ/control iterations, positive repeat weights, explicit gain/timing scenarios and saved run recovery. See [coupled native bass planning](docs/coupled-native.md) for weighted-target, sub-gain/timing/crossover and LFE control. See [independent calibration targets](docs/calibration-curves.md) for separate Flat/Reference designs with shared controls and headroom. See [integrated native calibration](docs/integrated-calibration.md) for auditory-band matching, native-menu planning and original-recording clock tools. See the [Dirac-related development checklist](docs/dirac-coverage.md) and [temporal verification](docs/temporal-verification.md) for current evidence and limits.
 
 See [microphone-position plans](docs/spatial-plans.md) for explicit seat/point/repeat coverage, eight or more locations, independent validation roles and resumable one-position capture.
+
+See [receiver evidence and local input checks](docs/receiver-audit.md) for menu-gated read-only probing and explicitly authorized five-second Windows microphone-level statistics. Neither diagnostic establishes native DSP or microphone calibration.
 
 ## Installation
 

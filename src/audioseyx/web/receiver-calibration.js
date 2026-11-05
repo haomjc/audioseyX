@@ -1,6 +1,7 @@
 let nativeCalibrationProject='',nativeCalibrationResult='';
 
 function initReceiverCalibrationControls(){
+ initReceiverAuditControls();
  initNativeRefinementControls();
  $('phase-mode').addEventListener('change',()=>{
   $('native-calibration-options').classList.toggle('hidden',$('phase-mode').value!=='receiver');

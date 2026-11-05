@@ -98,7 +98,7 @@ def parse_speaker_settings(documents,status):
     return result
 
 
-def read_speaker_settings(host,status,base_url=None,timeout=2.5):
+def read_speaker_settings(host,status,base_url=None,timeout=2.5,*,sections=None,stop_on_error=False):
     from .receiver import private_host
     host=private_host(host)
     base_url=base_url or f"https://{'['+host+']' if ':' in host else host}:10443"
@@ -109,9 +109,13 @@ def read_speaker_settings(host,status,base_url=None,timeout=2.5):
     # Self-signed local receiver certificates are accepted for these reads
     # only. No process-wide TLS defaults or authenticated sessions are changed.
     client=build_opener(ProxyHandler({}),HTTPSHandler(context=ssl._create_unverified_context()),NoRedirect)
+    queries=[('configuration',3),('crossovers',6),('bass',7),('distances',4),('levels',5)]
+    if sections is not None:
+        if not isinstance(sections,(list,tuple,set)) or set(sections)-{n for n,_ in queries}:raise ValueError('Unknown read-only speaker settings section')
+        queries=[q for q in queries if q[0] in sections]
     documents={};errors={}
     deadline=time.monotonic()+min(7.5,timeout*5)
-    for name,kind in [("configuration",3),("crossovers",6),("bass",7),("distances",4),("levels",5)]:
+    for index,(name,kind) in enumerate(queries):
         try:
             remaining=deadline-time.monotonic()
             if remaining<=0:raise ValueError("Read-only speaker settings time budget exhausted")
@@ -119,7 +123,11 @@ def read_speaker_settings(host,status,base_url=None,timeout=2.5):
                 raw=response.read(262145)
             if len(raw)>262144:raise ValueError("Receiver settings response is too large")
             documents[name]=raw.decode("utf-8")
-        except (OSError,ValueError) as error:errors[name]=str(error)
+        except (OSError,ValueError) as error:
+            errors[name]=str(error)
+            if stop_on_error:
+                errors.update({n:'Skipped after a read failure; availability is unknown' for n,_ in queries[index+1:]})
+                break
     parsed_settings=parse_speaker_settings(documents,status)
     return {**parsed_settings,"available":bool(documents),"origin":origin,"certificate_identity_validated":False,
             "errors":errors,"acoustic_capture_verified":False}

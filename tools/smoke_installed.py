@@ -12,6 +12,7 @@ import tempfile
 package = Path(audioseyx.__file__).resolve().parent
 assert (package/'web'/'native-refinement.js').is_file()
 assert (package/'web'/'spatial-plan.js').is_file()
+assert (package/'web'/'receiver-audit.js').is_file()
 if "site-packages" not in package.parts:
     raise SystemExit("This check must import a wheel installed in site-packages")
 if any((package / name).exists() for name in ["native_tables.json", "channel_addresses.json"]):

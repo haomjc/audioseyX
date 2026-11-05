@@ -33,6 +33,7 @@ from .feature_coverage import capability_assessment
 from .calibration_curves import design_report
 from .saved_controls import make_saved_controls, load_saved_controls
 from .design_history import write_receipt
+from .receiver_audit import public_audit,load_probe_report,save_probe_report
 
 
 def public_design(design):
@@ -72,6 +73,9 @@ class Workbench:
         self.reference_target_curve = None
         self.saved_design_settings = None
         self.saved_controls_restored = False
+        self.receiver_audit=None
+        self.receiver_audit_path=None
+        self.input_level=None
         self.log('Workbench started. No receiver has been connected or modified.')
         for attribute, filename in [('target_curve','target-curve.json'), ('reference_target_curve','reference-target-curve.json')]:
             curve_file = self.home / filename
@@ -102,6 +106,13 @@ class Workbench:
             self.saved_controls_restored=self.saved_design_settings is not None
         except (ValueError,OSError,TypeError,RecursionError):
             self.log('Saved controls could not be restored; default controls are shown. No job was started.')
+        for attribute,filename,schema in [('receiver_audit','receiver-audit.json','audioseyx-receiver-audit-1'),
+                                          ('input_level','input-level.json','audioseyx-input-level-1')]:
+            try:
+                report=load_probe_report(self.home/filename,schema)
+                setattr(self,attribute,report)
+                if attribute=='receiver_audit' and report is not None:self.receiver_audit_path=self.home/filename
+            except (ValueError,OSError,TypeError,RecursionError):self.log('A saved diagnostic report could not be restored. No probe or audio capture started.')
 
     def log(self, text):
         self.events.append({"time": time.strftime("%H:%M:%S"), "message": str(text)})
@@ -115,11 +126,13 @@ class Workbench:
                             'temporal_verification':True,'capability_assessment':True,'independent_native_curves':True,
                             'coupled_native_controls':True,'data_linked_saved_controls':True,
                             'native_eq_refinement':True,'measurement_robustness':True,'design_history':True,
-                            'spatial_measurement_plans':True,'resumable_position_capture':True},
+                            'spatial_measurement_plans':True,'resumable_position_capture':True,
+                            'receiver_read_only_audit':True,'local_input_level_check':sys.platform=='win32'},
                 'capability_assessment': capability_assessment(self.project),
                 "project": self.project.summary() if self.project else None,
                 "design": public_design(self.design), "joint": self.joint, "job": dict(self.job),
                 "receiver": self.receiver, "events": self.events[-15:],
+                'receiver_audit':public_audit(self.receiver_audit),'input_level':self.input_level,
                 "export_available": self.export_path is not None,
                 "analysis_available": self.analysis_path is not None,
                 'verification_available': self.verification_path is not None,
@@ -305,6 +318,49 @@ class Workbench:
             write_receipt(self.home,project,settings,status,**details)
         except (ValueError,TypeError,OSError,RecursionError):
             self.log('The local run receipt could not be saved. Existing results and exports are retained.')
+
+    def start_receiver_audit(self,body):
+        from .receiver_audit import probe_receiver
+        host=body.get('host') or (self.receiver.get('host') if self.receiver else None)
+        # Validate without opening a connection before reserving the diagnostic job.
+        ReceiverClient(host)
+        with self.lock:
+            if self.job.get('status')=='running':raise ValueError('Wait for the active job before probing receiver capabilities')
+            self.job={'status':'running','kind':'receiver_audit','progress':0,'message':'Reading receiver capabilities; no settings or audio operations'}
+        def run():
+            try:
+                report=probe_receiver(host,progress=lambda n,m:self.job.update(progress=n,message=m))
+                archive=self.home/'diagnostics';archive.mkdir(exist_ok=True)
+                save_probe_report(archive/('receiver-'+report['evidence_sha256']+'.json'),report)
+                path=self.home/'receiver-audit.json';report=save_probe_report(path,report)
+                with self.lock:
+                    self.receiver_audit=report;self.receiver_audit_path=path
+                    self.job={'status':'complete','kind':'receiver_audit','progress':100,'message':'Read-only receiver evidence saved; signal processing remains unverified'}
+                self.log('Read-only audit complete. Capture selection, measurement references, receiver settings and filters were not changed.')
+            except Exception as error:
+                self.job={'status':'failed','kind':'receiver_audit','progress':0,'message':str(error)}
+                self.log('Receiver audit incomplete; the previous saved report is retained: '+str(error))
+        threading.Thread(target=run,daemon=True).start()
+        return dict(self.job)
+
+    def start_input_level(self,body):
+        if body.get('ready') is not True:raise ValueError('Explicitly allow this five-second local microphone level check')
+        if body.get('seconds',5)!=5:raise ValueError('The local level check is fixed at five seconds')
+        from .audio_input import check_input_level
+        with self.lock:
+            if self.job.get('status')=='running':raise ValueError('Wait for the active job before accessing a recording input')
+            self.job={'status':'running','kind':'input_level','progress':0,'message':'Checking input level for five seconds; no audio file or playback'}
+        def run():
+            try:
+                report=save_probe_report(self.home/'input-level.json',check_input_level(body.get('device_index')))
+                with self.lock:
+                    self.input_level=report
+                    self.job={'status':'complete','kind':'input_level','progress':100,'message':'Input-level statistics saved; audio samples discarded'}
+            except Exception as error:
+                self.job={'status':'failed','kind':'input_level','progress':0,'message':str(error)}
+                self.log('Input-level check incomplete: '+str(error))
+        threading.Thread(target=run,daemon=True).start()
+        return dict(self.job)
 
     def cancel_design(self):
         with self.lock:

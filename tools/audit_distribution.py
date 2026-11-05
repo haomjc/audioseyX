@@ -13,6 +13,7 @@ FORBIDDEN_SUFFIXES = {".exe", ".ady", ".oca", ".awb", ".npz", ".npy", ".log", ".
 WHEEL_REQUIRED = {"audioseyx/__init__.py", "audioseyx/__main__.py", "audioseyx/synthetic_hashes.json",
                   "audioseyx/web/native-refinement.js", "audioseyx/native_refinement.py", "audioseyx/measurement_robustness.py", "audioseyx/design_history.py",
                   "audioseyx/web/spatial-plan.js", "audioseyx/spatial_plan.py",
+                  "audioseyx/web/receiver-audit.js", "audioseyx/receiver_audit.py", "audioseyx/audio_input.py",
                   "audioseyx/web/index.html", "audioseyx/web/app.js", "audioseyx/web/analysis.js",
                   "audioseyx/web/downloads.js", "audioseyx/web/joint.js", "audioseyx/web/layouts.js", "audioseyx/web/polarity.js", "audioseyx/web/transfer.js", "audioseyx/web/receiver-calibration.js", "audioseyx/web/clock.js", "audioseyx/web/verification.js", "audioseyx/web/curve-profiles.js", "audioseyx/web/processing-controls.js", "audioseyx/web/style.css"}
 

@@ -19,6 +19,27 @@ from audioseyx.model import Measurement, Project
 
 
 class HttpWorkflowTests(unittest.TestCase):
+    def test_readonly_receiver_audit_and_explicit_input_level_workflow(self):
+        from test_receiver_audit import snapshot,MENU,wait
+        from audioseyx.receiver_audit import build_audit
+        from audioseyx.audio_input import summarize_levels
+        import numpy as np
+        self.bench.receiver=None
+        with patch('audioseyx.receiver_audit.probe_receiver',return_value=build_audit(snapshot(),MENU)):
+            with self.request('/api/receiver/audit',{'host':'127.0.0.1'},self.bench.token) as response:json.load(response)
+            wait(self.bench)
+        self.assertEqual(self.bench.job['status'],'complete');self.assertIsNone(self.bench.receiver)
+        with self.request('/download-receiver-audit') as response:self.assertTrue(json.load(response)['read_only'])
+        with patch('audioseyx.audio_input.list_inputs',return_value=[{'index':0,'name':'Synthetic microphone','channels':1}]):
+            with self.request('/api/audio-inputs') as response:self.assertFalse(json.load(response)['audio_captured'])
+        with patch('audioseyx.audio_input.check_input_level',return_value=summarize_levels(np.zeros(8000),8000)) as recorder:
+            with self.assertRaises(HTTPError):self.request('/api/audio-inputs/level',{'ready':False},self.bench.token)
+            recorder.assert_not_called()
+            with self.request('/api/audio-inputs/level',{'ready':True},self.bench.token) as response:json.load(response)
+            wait(self.bench)
+        self.assertEqual(self.bench.job['status'],'complete');self.assertFalse(self.bench.input_level['audio_file_saved'])
+        with self.request('/receiver-audit.js') as response:self.assertIn(b'initReceiverAuditControls',response.read())
+
     def test_spatial_plan_preview_save_and_resume_preview_are_offline(self):
         from test_spatial_plan import fixture
         self.bench.set_project(fixture(1,repeats=2));self.bench.receiver=None

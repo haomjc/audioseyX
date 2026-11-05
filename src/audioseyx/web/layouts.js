@@ -11,6 +11,7 @@ async function loadLayoutChoices(){
 }
 
 function renderReceiverLayout(receiver){
+ renderReceiverAudit(state);
  loadLayoutChoices();
  if(!receiver?.connected)return;
  const info=receiver.info||{},layout=receiver.configured_layout;

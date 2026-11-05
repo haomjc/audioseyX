@@ -108,6 +108,8 @@ def build_server(bench_factory, home, port=0, open_browser=True):
             target, name, mime = bench.verification_path, 'playback-verification.json', 'application/json'
         elif path == '/download-capabilities':
             target, name, mime = bench.capability_path, 'capability-assessment.json', 'application/json'
+        elif path == '/download-receiver-audit':
+            target,name,mime=bench.receiver_audit_path,'receiver-read-only-evidence.json','application/json'
         elif path == "/download-polarity":
             target,name,mime=bench.polarity_path,"polarity-report.json","application/json"
         elif path == '/download-clock':
@@ -159,6 +161,14 @@ def build_server(bench_factory, home, port=0, open_browser=True):
                 return Response((assets/'native-refinement.js').read_bytes(),content_type='text/javascript; charset=utf-8')
             if path == '/spatial-plan.js':
                 return Response((assets/'spatial-plan.js').read_bytes(),content_type='text/javascript; charset=utf-8')
+            if path == '/receiver-audit.js':
+                return Response((assets/'receiver-audit.js').read_bytes(),content_type='text/javascript; charset=utf-8')
+            if path == '/download-receiver-audit':
+                target,info=download_info(path)
+                return send_file(target,mimetype=info['mime'],as_attachment=True,download_name=info['filename'],etag=info['sha256'])
+            if path == '/api/audio-inputs':
+                from .audio_input import list_inputs
+                return reply({'devices':list_inputs(),'audio_captured':False})
             if path == "/api/layouts":
                 from .layouts import presets
                 from .model import CHANNELS
@@ -213,6 +223,10 @@ def build_server(bench_factory, home, port=0, open_browser=True):
             result = bench.start_native_measurement(body)
         elif path == '/api/native-measure/preview':
             result=bench.preview_native_measurement(body)
+        elif path == '/api/receiver/audit':
+            result=bench.start_receiver_audit(body)
+        elif path == '/api/audio-inputs/level':
+            result=bench.start_input_level(body)
         elif path == '/api/spatial-plan':
             result=bench.set_spatial_plan(body)
         elif path == '/api/spatial-plan/preview':
@@ -225,11 +239,11 @@ def build_server(bench_factory, home, port=0, open_browser=True):
             bench.capture_cancel.set()
             result = {"cancel_requested": True}
         elif path == "/api/receiver/discover":
-            if bench.job["status"] == "running" and bench.job.get("kind") in ["native_measure", "transfer"]:
+            if bench.job["status"] == "running" and bench.job.get("kind") in ["native_measure", "transfer",'receiver_audit']:
                 raise ValueError('Receiver calibration communication is active; wait or stop capture before discovery')
             result = discover()
         elif path == "/api/receiver/connect":
-            if bench.job["status"] == "running" and bench.job.get("kind") in ["native_measure", "transfer"]:
+            if bench.job["status"] == "running" and bench.job.get("kind") in ["native_measure", "transfer",'receiver_audit']:
                 raise ValueError('Receiver calibration communication is active; reconnecting is temporarily unavailable')
             result = ReceiverClient(body["host"]).read_info(include_settings=True)
             if result.get("connected") and body.get("capture_channels") is not None:

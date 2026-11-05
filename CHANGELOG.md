@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0a13 — read-only receiver evidence and explicit local input checks
+
+- Read the receiver's actual speaker menu before choosing exposed basic settings queries. Stop on the first settings read failure; hidden feature names and timeouts never become claims about writable DSP or independent EQ.
+- Archive timestamped receiver evidence with integrity checks, separate readable sub parameters from measured signal behavior, and retain unverified native phase, filter independence and support routing states.
+- Add an explicit five-second Windows input-level check with unambiguous device selection. Discard samples and save only numeric level statistics; no playback, gain change or audio file. Startup restores reports without network or microphone access.
+- Expose the diagnostics in the English interface and local APIs while preserving capture selection, original measurement references and project data.
+
 ## 0.5.0a12 — explicit spatial plans and resumable position capture
 
 - Separate planned locations, seat priorities, response repeats and capture runs. Replace the fixed seven-point workflow with an editable position/seat/role/output matrix; retain arbitrary imported position IDs.
