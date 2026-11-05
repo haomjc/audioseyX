@@ -1,6 +1,6 @@
 # OCA replacement status
 
-**audioseyX 0.5.0a7 is not yet a verified replacement for the complete OCA workflow.** Several measurement, analysis and optimization components are implemented; a complete native calibration and normal-playback acoustic result have not been established.
+**audioseyX 0.5.0a8 is not yet a verified replacement for the complete OCA workflow.** Several measurement, analysis and optimization components are implemented; a complete native calibration and normal-playback acoustic result have not been established.
 
 This assessment distinguishes the user's A1 Evo AcoustiX 2026-06-09 package from GSonic Reference. It describes inspected behavior and audioseyX's evidence, rather than an independently measured product comparison.
 
@@ -10,7 +10,7 @@ This assessment distinguishes the user's A1 Evo AcoustiX 2026-06-09 package from
 | Minimum-phase EQ and target curves | Implemented | Native tier budgets, measured-band limits and offline numerical tests; no same-data acoustic superiority claim |
 | XT32 native encoding | Implemented with optional personal compatibility data | A private differential experiment compared 34 main/sub/recorded-filter cases against the supplied package; serialized Float32 bytes matched in those cases |
 | Both calibration curves and all observed rate slots | Offline audited | Reconstructs every channel/curve/rate stream; verifies sequence, size, checksum, routing, count and serialized values before connecting |
-| Independent calibration-curve designs | Incomplete | Current preparation writes the same designed filter into both curve identifiers; independent curve targets are not yet exposed |
+| Independent calibration-curve designs | Implemented; hardware mapping/playback unverified | Separate Flat/Reference targets, shared headroom/controls, fixed-control Reference evaluation and curve-specific stream hashes; see [calibration curves](calibration-curves.md) |
 | Review and transfer transaction | Implemented; simulated validation | The review digest commits to the receiver, calibration, levels, settings, control frames and coefficient frames; real transfer is unverified |
 | Speaker distance, level and crossover calibration | Modeled native integration implemented; physical validation pending | Minimum-phase EQ, exact declared-grid shared-bass timing/linked crossover search and auditory-band trim proposals can enter the reviewed native transaction; main differences are preserved unless explicitly rescaled |
 | Multiple positions and seat priorities | Implemented; synthetic spatial validation | Actual three-seat correction still requires left/right measurements; repeats at the centre do not fill those seats |

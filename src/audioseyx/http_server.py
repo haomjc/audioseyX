@@ -170,7 +170,7 @@ def build_server(bench_factory, home, port=0, open_browser=True):
                     return reply({"error": 'The download changed; restart the download'}, 412)
                 return send_file(target, mimetype=info["mime"], as_attachment=True, download_name=info["filename"],
                                  conditional=True, etag=info["sha256"])
-            asset = {"/": "index.html", "/app.js": "app.js", "/analysis.js": "analysis.js", "/downloads.js": "downloads.js", "/joint.js": "joint.js", "/layouts.js":"layouts.js", "/polarity.js":"polarity.js", "/transfer.js":"transfer.js", '/receiver-calibration.js':'receiver-calibration.js', '/clock.js':'clock.js', '/verification.js':'verification.js', "/style.css": "style.css"}.get(path)
+            asset = {"/": "index.html", "/app.js": "app.js", "/analysis.js": "analysis.js", "/downloads.js": "downloads.js", "/joint.js": "joint.js", "/layouts.js":"layouts.js", "/polarity.js":"polarity.js", "/transfer.js":"transfer.js", '/receiver-calibration.js':'receiver-calibration.js', '/clock.js':'clock.js', '/verification.js':'verification.js', '/curve-profiles.js':'curve-profiles.js', "/style.css": "style.css"}.get(path)
             if asset is None:
                 return reply({"error": 'Page not found'}, 404)
             content = (assets / asset).read_bytes()

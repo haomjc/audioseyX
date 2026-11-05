@@ -30,13 +30,11 @@ from .analysis import analyze_measurement, room_modes
 from .comparison import compare_projects
 from .compat import compatibility_status
 from .feature_coverage import capability_assessment
+from .calibration_curves import design_report
 
 
 def public_design(design):
-    if not design:
-        return None
-    return {**{k: v for k, v in design.items() if k != "channels"},
-            "channels": [{k: v for k, v in item.items() if k != "taps" and not k.startswith("_")} for item in design["channels"]]}
+    return design_report(design)
 
 
 class Workbench:
@@ -69,17 +67,19 @@ class Workbench:
         self.clock_archive = None
         self.clock_reference_path = None
         self.target_curve = None
+        self.reference_target_curve = None
         self.log('Workbench started. No receiver has been connected or modified.')
-        curve_file = self.home / "target-curve.json"
-        if curve_file.is_file():
-            try:
-                saved = json.loads(curve_file.read_text(encoding="utf-8"))
-                if saved:
-                    checked = parse_target_curve("\n".join(f"{f} {level}" for f, level in zip(saved["frequency"], saved["level_db"])))
-                    checked["name"] = str(saved["name"])
-                    self.target_curve = checked
-            except (OSError, ValueError, KeyError, TypeError):
-                self.log('The saved target curve could not be read. The default target has been restored.')
+        for attribute, filename in [('target_curve','target-curve.json'), ('reference_target_curve','reference-target-curve.json')]:
+            curve_file = self.home / filename
+            if curve_file.is_file():
+                try:
+                    saved = json.loads(curve_file.read_text(encoding="utf-8"))
+                    if saved:
+                        checked = parse_target_curve("\n".join(f"{f} {level}" for f, level in zip(saved["frequency"], saved["level_db"])))
+                        checked["name"] = str(saved["name"])
+                        setattr(self, attribute, checked)
+                except (OSError, ValueError, KeyError, TypeError):
+                    self.log('A saved target curve could not be read. Its default target has been restored.')
         last = self.home / "last-project.awb"
         if not last.is_file():
             last = self.home / "last-project.json"
@@ -103,7 +103,7 @@ class Workbench:
                 "features":{"full_complex_joint_fir":True,"native_synthesis_models":True,"per_frequency_fdw":True,
                             "variable_channel_layouts":True,"read_only_receiver_settings":True,
                             'native_receiver_calibration':True,'auditory_band_balance':True,'raw_clock_correction':True,
-                            'temporal_verification':True,'capability_assessment':True},
+                            'temporal_verification':True,'capability_assessment':True,'independent_native_curves':True},
                 'capability_assessment': capability_assessment(self.project),
                 "project": self.project.summary() if self.project else None,
                 "design": public_design(self.design), "joint": self.joint, "job": dict(self.job),
@@ -114,7 +114,8 @@ class Workbench:
                 'capability_report_available': self.capability_path is not None,
                 "polarity":self.polarity_report,
                 'clock':self.clock_result,
-                "target_curve": {"name": self.target_curve["name"], "points": len(self.target_curve["frequency"])} if self.target_curve else None}
+                "target_curve": {"name": self.target_curve["name"], "points": len(self.target_curve["frequency"])} if self.target_curve else None,
+                'reference_target_curve': {'name':self.reference_target_curve['name'], 'points':len(self.reference_target_curve['frequency'])} if self.reference_target_curve else None}
 
     def transfer_state(self):
         return {"template": {"model": self.template["model"], "tier": self.template["eqType"],
@@ -173,11 +174,18 @@ class Workbench:
     def start_design(self, settings):
         if not self.project:
             raise ValueError('Import measurements or load the demo first')
+        settings = copy.deepcopy(settings)
         with self.lock:
             if self.job["status"] == "running":
                 raise ValueError('A design job is already running')
             project = self.project
             settings["target_curve"] = self.target_curve
+            if settings.get('curve_profiles') is not None:
+                profiles = settings['curve_profiles']
+                if not isinstance(profiles, dict) or not isinstance(profiles.get('Reference'), dict):
+                    raise ValueError('Independent calibration curves require a Reference profile')
+                if self.reference_target_curve:
+                    profiles['Reference']['target_curve'] = copy.deepcopy(self.reference_target_curve)
             if settings.get('optimizer') == 'native_calibration':
                 cached = self.receiver.get('web_settings', {}) if self.receiver and self.receiver.get('connected') else project.metadata.get('receiver_settings_snapshot', {})
                 settings['receiver_snapshot'] = copy.deepcopy(cached)
@@ -257,21 +265,25 @@ class Workbench:
     def set_curve(self, body):
         if self.job["status"] == "running":
             raise ValueError('Wait for the current job before changing the target curve')
+        curve_name = body.get('curve_name', 'Flat')
+        if curve_name not in ['Flat', 'Reference']:
+            raise ValueError('Choose Flat or Reference for target-curve import')
+        attribute, filename = ('target_curve','target-curve.json') if curve_name=='Flat' else ('reference_target_curve','reference-target-curve.json')
         if body.get("reset") is True:
-            self.target_curve = None
+            curve = None
         else:
             raw = base64.b64decode(body["data"], validate=True)
             if len(raw) > 1024 * 1024:
                 raise ValueError('The target curve file is too large')
             curve = parse_target_curve(raw.decode("utf-8-sig"))
             curve["name"] = Path(body["filename"]).name
-            self.target_curve = curve
+        setattr(self, attribute, curve)
         self.design = None
         self.joint = None
         self.export_path = None
         self.transfer_plan = None
-        (self.home / "target-curve.json").write_text(json.dumps(self.target_curve, ensure_ascii=False), encoding="utf-8")
-        return self.state()["target_curve"]
+        (self.home / filename).write_text(json.dumps(curve, ensure_ascii=False), encoding="utf-8")
+        return self.state()[attribute]
 
     def start_native_measurement(self, body):
         if not self.receiver or not self.receiver.get("connected"):
@@ -356,6 +368,7 @@ class Workbench:
             raise ValueError('Wait for the current job to finish')
         self.design["settings"]["uncorrected_measurements_confirmed"] = body.get("uncorrected_confirmed") is True
         self.design['settings']['apply_receiver_adjustments'] = body.get('apply_receiver_adjustments') is True
+        self.design['settings']['initial_playback_curve'] = body.get('initial_curve', 'Flat')
         self.receiver = ReceiverClient(self.receiver["host"]).read_info(include_settings=self.design['settings']['apply_receiver_adjustments'])
         plan = prepare_transfer(self.project, self.design, self.template, self.receiver)
         (self.home / "prepared-calibration.oca").write_text(json.dumps(plan["calibration"], allow_nan=False), encoding="utf-8")

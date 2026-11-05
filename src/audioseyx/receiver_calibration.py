@@ -9,6 +9,7 @@ product. No FIR taps or measured frequency bins are removed.
 from __future__ import annotations
 
 from itertools import product
+import copy
 from math import prod
 import numpy as np
 from scipy import signal
@@ -17,7 +18,7 @@ from scipy.special import logsumexp
 from .auditory_balance import balance_groups
 from .curves import target_offset
 from .model import Project
-from .receiver_constraints import receiver_profile, snapshot_fingerprint, quantized_distance_proposal, distance_basis
+from .receiver_constraints import receiver_profile, snapshot_fingerprint, quantized_distance_proposal, distance_basis, validate_receiver_proposal
 from .receiver_web import CROSSOVER_GROUPS
 from .routing import crossover_responses
 from .spectral_grid import SpectralGrid, position_weights
@@ -321,6 +322,61 @@ def native_routed_charts(grid, snapshot, proposal, settings, positions, referenc
                            'phase_mode':'native_receiver_model','effective_delay_ms':0.},
                 'limitations':['Unprocessed-output response with baseline controls versus the proposed minimum-phase EQ and native controls, under the stated routing model. This is not measured stock-Audyssey or corrected playback. Plot averaging does not replace per-record fitting; raw timing and repeats are retained.']})
     return output
+
+
+def evaluate_shared_curve_controls(project, design, primary, *, cancel=None):
+    """Forward-evaluate an alternate EQ; never select a second hardware state."""
+    settings = dict(design['settings'])
+    snapshot = settings.get('receiver_snapshot', project.metadata.get('receiver_settings_snapshot', {}))
+    proposal = copy.deepcopy(validate_receiver_proposal(primary, snapshot, snapshot.get('configured_channels', [])))
+    result = {'schema': 'audioseyx-shared-curve-controls-1', 'shared_settings_from': 'Flat',
+              'proposal': proposal, 'controls_selected_for_this_curve': False,
+              'hardware_verified': False, 'original_ir_modified': False}
+    if not primary.get('search'):
+        return {**result, 'available': False,
+                'reason': 'The primary proposal is level-only; routed time/crossover evaluation requires its complete timing model. Reference charts show the EQ stage only.'}
+    validation = set(design.get('validation_positions', []))
+    train = Project(project.name, [m for m in project.measurements if m.position not in validation],
+                    project.origin, project.model, project.tier, dict(project.metadata))
+    grid = SpectralGrid(train, design, memory_mib=float(settings.get('receiver_memory_mib', 512)), cancel=cancel)
+    weights = position_weights(train, settings)
+    mains = [c for c in train.channels if not c.startswith('SW')]
+    subs = [c for c in train.channels if c.startswith('SW')]
+    if len(subs)!=1:
+        raise ValueError('Fixed shared-curve timing evaluation requires one physical subwoofer')
+    profile = primary['profile']
+    groups = _linked_groups(mains, snapshot, profile, settings)
+    references = {c:grid.items[c]['metrics']['reference_level_db'] +
+                  (snapshot['levels_db'][c] if settings['receiver_measurement_context']=='native_uncorrected' else 0.) for c in mains}
+    if settings.get('receiver_auditory_balance', True):
+        for group in settings.get('same_model_groups', project.metadata.get('same_model_groups', [])):
+            value = float(np.mean([references[c] for c in group]))
+            for c in group:references[c] = value
+    choices = {g['id']: proposal['crossovers_hz'].get(g['channels'][0], g['current_hz']) for g in groups}
+    if any(any(proposal['crossovers_hz'].get(c,g['current_hz'])!=choices[g['id']] for c in g['channels']) for g in groups):
+        raise ValueError('Common curve controls disagree within a linked crossover group')
+    internal = {**settings, 'receiver_delay_speed_m_s':primary['assumptions']['distance_delay_speed_m_s'],
+                '_receiver_target_references_db': references, '_receiver_base_distances_m': proposal['distances_m']}
+    selected = {g['id']:[choices[g['id']]] for g in groups}
+    table = _cost_table(grid, snapshot, internal, groups, proposal['levels_db'], weights, selected)
+    evaluation = evaluate_settings_table(table, 0., subs[0] in proposal['inverted_outputs'], internal, choices)
+    band = table['band_hz']; del table
+    charts = native_routed_charts(grid, snapshot, proposal, internal, weights, references)
+    held_evaluation = None
+    if validation:
+        held = Project(project.name, [m for m in project.measurements if m.position in validation],
+                       project.origin, project.model, project.tier, dict(project.metadata))
+        held_grid = SpectralGrid(held, design, memory_mib=float(settings.get('receiver_memory_mib', 512)), cancel=cancel)
+        held_settings = {**internal, 'position_weights':{}, 'receiver_analysis_low_hz':band[0], 'receiver_analysis_high_hz':band[1]}
+        held_weights = position_weights(held, held_settings)
+        table = _cost_table(held_grid, snapshot, held_settings, groups, proposal['levels_db'], held_weights, selected)
+        held_evaluation = {'positions':sorted(validation), 'used_for_design':False,
+                           'references_from_training':True, 'renormalized_after_design':False,
+                           'evaluation':evaluate_settings_table(table, 0., subs[0] in proposal['inverted_outputs'], held_settings, choices)}
+    return {**result, 'available':True, 'training_positions':sorted(weights), 'validation_positions':sorted(validation),
+            'fixed_training_target_references_db':references, 'evaluation':evaluation,
+            'independent_validation':held_evaluation, 'routed_charts':charts,
+            'notice':'Reference EQ evaluated with the Flat-selected distance/level/crossover/polarity proposal held fixed. Every recorded repeat and routing-model alternative is retained. No second menu search, trim balancing or target normalization uses holdout data.'}
 
 
 def calibrate_receiver(project, design, settings, *, progress=None, cancel=None):

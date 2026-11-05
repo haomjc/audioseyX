@@ -59,12 +59,16 @@ The pure-delay example has a peak time of 4 ms after accounting for the original
 | `temporal` | `compare_temporal_records(before, after)` | Every retained repeat in a common observed window |
 | `temporal` | `predict_filter_temporal(project, design)` | Complete EQ-stage linear convolution with a frozen original reference |
 | `feature_coverage` | `capability_assessment(project=None)` | Engineering checklist and current project evidence; no performance percentage |
+| `calibration_curves` | `curve_designs(design)` | Complete Flat/Reference designs with common geometry validation |
+| `receiver_calibration` | `evaluate_shared_curve_controls(project, design, primary)` | Alternate-target evaluation with primary-selected controls fixed |
 
 ## Local web API
 
 The web API is an implementation detail of the desktop workflow. It binds to loopback. Write requests require the current session token and an accepted origin. Receiver-changing operations additionally require review within the application. Do not embed the token in public examples or configure an external service around this local API.
 
 `GET /api/capabilities` returns the current development checklist without contacting the receiver. `POST /api/capabilities/export` creates a private downloadable assessment; `POST /api/compare` creates a separate verification JSON report with original-repeat temporal diagnostics. Download paths are `/download-capabilities` and `/download-verification`; changing the project invalidates both. See [temporal verification](temporal-verification.md) for reference, playback-chain, memory and support requirements.
+
+For [independent calibration curves](calibration-curves.md), `POST /api/target-curve` accepts `curve_name="Flat"` (default) or `"Reference"`. Imports persist independently and invalidate the current bundle. `curve_profiles` in `/api/design` requests two complete designs. `/api/transfer/prepare` additionally accepts `initial_curve="Flat"` or `"Reference"`, committed to the reviewed byte transaction. No design or target import contacts a receiver.
 
 ## CLI
 

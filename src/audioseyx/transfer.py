@@ -22,8 +22,9 @@ from .compat import load_channel_addresses
 from .coefficient_transport import quantization_report, audit_coefficient_streams, packet_digest
 from .native_protocol import acknowledgement
 from .receiver_constraints import validate_receiver_proposal
+from .calibration_curves import CURVE_SPECS, PROFILE_KEYS, curve_designs, fir_fingerprint
 
-PLAN_SCHEMA = "audioseyx-native-transfer-3"
+PLAN_SCHEMA = "audioseyx-native-transfer-4"
 
 
 def _control_packets(plan):
@@ -70,6 +71,23 @@ def audit_transfer_plan(plan):
         audit = audit_coefficient_streams(plan["packets"], plan["native_manifest"], fixed=plan["fixed"])
         if audit != plan["summary"]["coefficient_transport_audit"]:
             raise ValueError("Native transfer audit differs from the reviewed summary")
+        channels = {c['commandId']:c for c in plan['calibration']['channels']}
+        if len(channels)!=len(plan['calibration']['channels']) or set(channels)!={r['channel'] for r in plan['native_manifest']}:
+            raise ValueError('Calibration and reviewed coefficient manifests cover different outputs')
+        for entry in plan['native_manifest']:
+            for name, spec in CURVE_SPECS.items():
+                details = entry.get('curves', {}).get(str(spec['curve_id']), {})
+                taps = channels[entry['channel']].get(spec['calibration_field'], [])
+                if len(taps)!=capability(entry['tier']).shape(entry['channel'])[0] or details.get('fir_sha256')!=fir_fingerprint(taps):
+                    raise ValueError('Calibration curve FIRs differ from the reviewed slot mapping')
+        initial = plan['summary']['initial_curve']
+        if initial not in CURVE_SPECS or plan['settings'].get('AudyEqSet')!=initial:
+            raise ValueError('Initial curve selection differs from the reviewed native plan')
+        expected_settings = {'AudyFinFlg':'NotFin', 'AudyDynEq':False, 'AudyDynVol':False,
+                             'AudyMultEq':True, 'AudyEqSet':initial}
+        if (plan['settings']!=expected_settings or plan['settings']['AudyDynEq'] is not False or
+            plan['settings']['AudyDynVol'] is not False or plan['settings']['AudyMultEq'] is not True):
+            raise ValueError('Unexpected calibration control settings in the reviewed native plan')
         return audit
     except (KeyError, TypeError, OverflowError) as error:
         raise ValueError("The native transfer plan is incomplete or malformed") from error
@@ -141,6 +159,8 @@ def template_from_receiver(receiver, design):
 
 def prepare_transfer(project, design, template, receiver):
     validate_template(template, allow_settings_only=True)
+    if design.get('project_id')!=project.id:
+        raise ValueError('The filter design belongs to another measurement project; redesign before preparing transfer')
     area=design.get('settings',{}).get('listening_area_resolution')
     if area and not area.get('required_seats_measured'):
         raise ValueError('A provisional listening-area design with missing measured seats cannot be prepared as final row calibration')
@@ -195,13 +215,19 @@ def prepare_transfer(project, design, template, receiver):
             channel['distanceInMeters'] = receiver_proposal['distances_m'][name]
             channel['trimAdjustmentInDbs'] = receiver_proposal['levels_db'][name]
             if name in receiver_proposal['crossovers_hz']: channel['xover'] = receiver_proposal['crossovers_hz'][name]
-    designs = {item["channel"]: item for item in design["channels"]}
-    if len(designs) != len(design["channels"]) or set(designs) != configured:
-        raise ValueError('The design must contain exactly one complete filter for every configured channel')
+    curves = curve_designs(design)
+    initial_curve = design['settings'].get('initial_playback_curve', 'Flat')
+    if initial_curve not in CURVE_SPECS:
+        raise ValueError('Choose Flat or Reference as the initial receiver curve')
+    designs = {name:{item['channel']:item for item in curve['channels']} for name,curve in curves.items()}
+    for name, curve in curves.items():
+        if len(designs[name])!=len(curve['channels']) or set(designs[name])!=configured:
+            raise ValueError('Each calibration curve must contain exactly one complete filter for every configured channel')
     # Compile before gain planning, then again only after the actual scaling.
     # Keep the observed encoder calculation rather than assuming a synthesis
     # model or changing coefficient rounding through algebraic shortcuts.
-    encoded = {name: compile_channel(item, tier) for name, item in designs.items()}
+    encoded = {curve:{name:compile_channel(item, tier) for name,item in items.items()}
+               for curve,items in designs.items()}
     packets = []
     native_manifest = []
     used = set()
@@ -209,8 +235,9 @@ def prepare_transfer(project, design, template, receiver):
     global_scale = 1.0
     if settings_only:
         peaks = []
-        for name, item in designs.items():
-            peaks += [float(np.max(np.abs(item["taps"]))), float(np.max(np.abs(encoded[name]["coefficients"])))]
+        for curve, items in designs.items():
+            for name, item in items.items():
+                peaks += [float(np.max(np.abs(item["taps"]))), float(np.max(np.abs(encoded[curve][name]["coefficients"])))]
         needed = max(0., 20 * np.log10(max(max(peaks), 1e-15) / .5))
         global_scale = 10 ** (-np.ceil(needed * 10 - 1e-9) / 10 / 20)
     for channel in out["channels"]:
@@ -219,16 +246,8 @@ def prepare_transfer(project, design, template, receiver):
         if address is None or address in used:
             raise ValueError('Unverified or conflicting channel addresses for this device family: ' + name)
         used.add(address)
-        item = copy.copy(designs[name])
-        if receiver_proposal and name in receiver_proposal['inverted_outputs']:
-            item['taps'] = -item['taps']
-            # No arbitrary mixed-phase transformation: a global sign preserves
-            # minimum-phase zeros and the observed native encoder is linear.
-            if '_native_parameters' in item:
-                item['_native_parameters'] = -item['_native_parameters']
-                item['_native_parameter_taps'] = -item['_native_parameter_taps']
-        native = encoded[name]["coefficients"]
-        peak = max(float(np.max(np.abs(native))), float(np.max(np.abs(item["taps"]))))
+        peak = max(max(float(np.max(np.abs(encoded[curve][name]['coefficients']))),
+                       float(np.max(np.abs(designs[curve][name]['taps'])))) for curve in curves)
         needed = max(0., 20 * np.log10(max(peak, 1e-15) / .5))
         scale = global_scale if settings_only else 10 ** (-np.ceil(needed * 10 - 1e-9) / 10 / 20)
         compensation = -20 * np.log10(scale)
@@ -237,21 +256,30 @@ def prepare_transfer(project, design, template, receiver):
             raise ValueError(f"{name} coefficient gain compensation exceeds the trim budget; reduce target boost and redesign")
         if trim is not None:
             channel["trimAdjustmentInDbs"] = round(trim, 1)
-        item["taps"] = item["taps"] * scale
-        compiled = compile_channel(item, tier)
-        native = compiled["coefficients"]
-        channel["filter"] = item["taps"].tolist()
-        channel["filterLV"] = channel["filter"].copy()
-        native_manifest.append({"channel": name, "address": address, "tier": tier,
-                                "codec": compiled["codec"],
-                                **quantization_report(native, fixed)})
+        manifest = {'channel':name, 'address':address, 'tier':tier,
+                    'coefficient_count':capability(tier).shape(name)[2], 'curves':{}}
+        for curve, spec in CURVE_SPECS.items():
+            item = copy.copy(designs[curve][name])
+            if receiver_proposal and name in receiver_proposal['inverted_outputs']:
+                item['taps'] = -item['taps']
+                if '_native_parameters' in item:
+                    item['_native_parameters'] = -item['_native_parameters']
+                    item['_native_parameter_taps'] = -item['_native_parameter_taps']
+            item['taps'] = item['taps'] * scale
+            compiled = compile_channel(item, tier)
+            native = compiled['coefficients']
+            channel[spec['calibration_field']] = item['taps'].tolist()
+            manifest['curves'][str(spec['curve_id'])] = {
+                'curve_name':curve, 'calibration_field':spec['calibration_field'],
+                'codec':compiled['codec'], 'fir_sha256':fir_fingerprint(item['taps']),
+                **quantization_report(native, fixed)}
+            for rate in [0,1,2]:
+                packets.extend(coefficient_packets(native, address, spec['curve_id'], rate, fixed))
+        native_manifest.append(manifest)
         adjustments.append({"channel": name, "coefficient_scale": scale, "trim_db": channel.get("trimAdjustmentInDbs"),
                             'filter_polarity_inverted': bool(receiver_proposal and name in receiver_proposal['inverted_outputs'])})
-        for curve in [0, 1]:
-            for rate in [0, 1, 2]:
-                packets.extend(coefficient_packets(native, address, curve, rate, fixed))
     settings = {"AudyFinFlg": "NotFin", "AudyDynEq": False, "AudyDynVol": False,
-                "AudyMultEq": True, "AudyEqSet": "Flat"}
+                "AudyMultEq": True, "AudyEqSet": initial_curve}
     # SWMIX is a status alias, not the individual SET_SETDAT control identifier.
     controls = {c['commandId']: c['commandId'] if raw_mapping[c['commandId']].startswith('SWMIX') else raw_mapping[c['commandId']] for c in out['channels']}
     level = None if settings_only and not receiver_proposal else {"ChLevel": [{controls[c["commandId"]]: round(c["trimAdjustmentInDbs"] * 10)} for c in out["channels"]]}
@@ -271,9 +299,14 @@ def prepare_transfer(project, design, template, receiver):
         out["schema"] = "audyssey-workbench-calibration-1"
         out["global_headroom_db"] = float(-20 * np.log10(global_scale))
     wire_audit = audit_coefficient_streams(packets, native_manifest, fixed=fixed)
+    precision_rows = [details for entry in native_manifest for details in entry['curves'].values()]
     summary = {"model": model, "host": receiver["host"], "tier": tier,
                "channel_count": len(out["channels"]), "coefficient_packets": len(packets),
                "adjustments": adjustments, "hardware_verified": False,
+               'initial_curve':initial_curve, 'independent_curve_targets':design.get('curve_designs') is not None,
+               'curve_slots':copy.deepcopy(CURVE_SPECS),
+               'curve_targets':{name:{k:copy.deepcopy(v) for k,v in curve['settings'].items() if k in PROFILE_KEYS} for name,curve in curves.items()},
+               'curve_headroom_rule':'One common scale per output across both curves; one global scale when baseline trims are unknown',
                "original_filter_backup_available": not settings_only,
                "global_headroom_db": float(-20 * np.log10(global_scale)) if settings_only else 0,
                "coefficient_transport_audit": wire_audit,
@@ -282,8 +315,8 @@ def prepare_transfer(project, design, template, receiver):
                'receiver_model_assumptions': design.get('receiver_calibration', {}).get('assumptions') if receiver_proposal else None,
                'headroom_compensated_by_channel_levels': bool(not settings_only or receiver_proposal),
                "coefficient_quantization": {
-                   "maximum_absolute_error": max(row["maximum_absolute_error"] for row in native_manifest),
-                   "underflowed_values": sum(row["underflowed_values"] for row in native_manifest),
+                   "maximum_absolute_error": max(row["maximum_absolute_error"] for row in precision_rows),
+                   "underflowed_values": sum(row["underflowed_values"] for row in precision_rows),
                    "scope": "coefficient_values_only; native_DSP_reconstruction_unverified"},
                "notice": ('Experimental transfer includes the reviewed modeled speaker levels, distances, crossovers and subwoofer filter polarity. Firmware, bass mode and amplifier assignment are retained.' if receiver_proposal else 'Experimental transfer replaces both current calibration curves and disables Dynamic EQ and Dynamic Volume. Firmware, crossovers, distances and amplifier assignments are not changed.')}
     plan = {"schema": PLAN_SCHEMA, "summary": summary, "packets": packets, "calibration": out,

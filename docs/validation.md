@@ -40,6 +40,8 @@ Public tests do not need legacy numerical tables. Simulated receiver tests use a
 
 The native-workflow benchmark in 0.5.0a7 also exercises complete EQ-stage temporal convolution for all 96 synthetic original records, including holdouts. It checks retention and fixed temporal references/measured support. The packaged Windows build runs this path, so the installed temporal module is exercised as well as unit-tested. Short synthetic recordings correctly leave unsupported late-energy cutoffs unavailable.
 
+Version 0.5.0a8 adds a complete independent Reference target with another 195,586 XT32 FIR taps and a fixed evaluation of the Flat-selected controls. Offline transport self-tests now serialize distinct Flat/Reference data across every tier, numeric format and rate slot. These remain computational and byte-stream checks, not hardware certification.
+
 ## Three-seat numerical fixture
 
 `--listening-area-benchmark` uses abstract synthetic responses for three measured training seats and a separate held-out point. It checks seat priorities, full XT32 reference dimensionality, returned-filter gain feasibility and exact smooth-risk steps. Passing these assertions does not establish strict numerical convergence or performance in a real row. The recorded report keeps the convergence result explicitly, even when it is false.

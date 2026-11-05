@@ -39,14 +39,18 @@ def self_test():
                     # Artificial transport vectors and addresses, with no
                     # dependency on the private XT32 synthesis/encoding data.
                     values = np.zeros(capability(tier).shape(channel)[2]); values[0] = .25
-                    manifest.append({"channel": channel, "address": address, "tier": tier,
-                                     **quantization_report(values, fixed)})
+                    entry = {'channel':channel, 'address':address, 'tier':tier,
+                             'coefficient_count':len(values), 'curves':{}}
                     for curve in [0, 1]:
+                        curve_values = values if curve==0 else values*.5
+                        entry['curves'][str(curve)] = quantization_report(curve_values, fixed)
                         for slot in [0, 1, 2]:
-                            packets.extend(coefficient_packets(values, address, curve, slot, fixed))
+                            packets.extend(coefficient_packets(curve_values, address, curve, slot, fixed))
+                    manifest.append(entry)
                 audit = audit_coefficient_streams(packets, manifest, fixed=fixed)
                 checks.append({"name": f"Synthetic native transport / {tier} / {'Q31' if fixed else 'Float32'}",
-                               "passed": audit["all_streams_complete"], "streams": audit["streams"],
+                               "passed": audit["all_streams_complete"] and audit['channels_with_distinct_curve_coefficients']==2,
+                               "streams": audit["streams"], 'distinct_curve_outputs':audit['channels_with_distinct_curve_coefficients'],
                                "native_encoding_checked": False, "hardware_tested": False})
             except Exception as error:
                 checks.append({"name": f"Synthetic native transport / {tier}", "passed": False, "error": str(error)})

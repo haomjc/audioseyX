@@ -213,6 +213,9 @@ def design_project(project, tier, settings, progress=None, *, cancel=None):
     from .model import unsafe_capture_indices
     if unsafe_capture_indices(project):
         raise ValueError("Some subwoofer records used unverified SWMIX sweep addressing. Preserve them, then exclude or remeasure before filter design.")
+    if settings.get('curve_profiles') is not None:
+        from .calibration_curves import design_calibration_curves
+        return design_calibration_curves(project, tier, settings, progress, cancel=cancel)
     settings=dict(settings)
     validation=settings.get('validation_positions',[])
     if isinstance(validation,str):validation=[p.strip() for p in validation.split(',') if p.strip()]

@@ -38,7 +38,8 @@ def run_native_workflow_benchmark(progress=None):
               'receiver_delay_speed_m_s':300.,'receiver_max_delay_ms':6.,'receiver_delay_penalty':0.,
               'receiver_crossover_candidates_hz':[60.,80.,100.],'receiver_memory_mib':1024,
               'low_hz':20,'high_hz':500,'sub_high_hz':200,'max_boost_db':3,'max_cut_db':12,
-              'bass_db':0.,'tilt_db_oct':0.,'temporal_diagnostics':True}
+              'bass_db':0.,'tilt_db_oct':0.,'temporal_diagnostics':True,
+              'curve_profiles':{'Reference':{'bass_db':3.,'target_curve':None}}}
     result=design_project(project,'XT32',settings,progress)
     native=result['receiver_calibration'];proposal=native['proposal'];search=native['search']
     checks=[{'name':'Complete XT32 fixed-FIR space retained','passed':sum(len(i['taps']) for i in result['channels'])==195586},
@@ -58,6 +59,14 @@ def run_native_workflow_benchmark(progress=None):
     checks.extend([
         {'name':'All original repeats retained in complete EQ-stage convolution','passed':complete_temporal},
         {'name':'Temporal references and measured support remain fixed','passed':fixed_references}])
+    reference_curve = result['curve_designs']['Reference']
+    checks.extend([
+        {'name':'Reference retains its complete independent XT32 FIR space',
+         'passed':sum(len(i['taps']) for i in reference_curve['channels'])==195586 and
+                  any(not np.array_equal(a['taps'],b['taps']) for a,b in zip(result['channels'],reference_curve['channels']))},
+        {'name':'Both curves share the primary-selected native controls',
+         'passed':reference_curve['shared_receiver_evaluation']['proposal']==proposal and
+                  not reference_curve['shared_receiver_evaluation']['controls_selected_for_this_curve']}])
     clock_rate=8000;duration=.04;times=np.array([.4,1.3,2.2,3.1]);ppm=350.
     recording_time=np.arange(32000)/clock_rate;reference=(recording_time-.035)/(1+ppm*1e-6)
     recording=np.zeros(len(recording_time))
@@ -80,6 +89,8 @@ def run_native_workflow_benchmark(progress=None):
             'temporal_prediction':{'stage':temporal['stage'],'records':len(temporal['records']),
                                    'all_original_records_retained':complete_temporal,'fixed_references_and_support':fixed_references,
                                    'hardware_verified':False},
+            'reference_curve':{'expanded_fir_taps':sum(len(i['taps']) for i in reference_curve['channels']),
+                               'shared_controls_evaluation':reference_curve['shared_receiver_evaluation']},
             'clock':{'known_drift_ppm':ppm,'before':before,'after':after,'mapping':mapping},
             'runtime_seconds':time.monotonic()-started,
             'environment':{'python':platform.python_version(),'numpy':np.__version__,'scipy':scipy.__version__},

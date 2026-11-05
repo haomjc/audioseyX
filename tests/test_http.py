@@ -69,6 +69,35 @@ class HttpWorkflowTests(unittest.TestCase):
             self.assertIn(b'initClockControls',response.read())
         with self.request('/verification.js') as response:
             self.assertIn(b'renderCapabilityAssessment',response.read())
+        with self.request('/curve-profiles.js') as response:
+            self.assertIn(b'calibrationCurveSettings',response.read())
+
+    def test_two_curve_design_has_distinct_public_results_and_complete_download(self):
+        import zipfile
+        self.bench.set_project(Project('two curves',[Measurement('FL','p0','synthetic',ir=[0,1,0,0])],'synthetic'))
+        with self.request('/api/design',{'tier':'MultEQ','bass_db':0,'tilt_db_oct':0,
+                          'curve_profiles':{'Reference':{'bass_db':6,'target_curve':None}}},self.bench.token) as response:
+            self.assertIn(json.load(response)['status'],['running','complete'])
+        self.wait_design()
+        self.assertEqual(self.bench.job['status'],'complete',self.bench.job)
+        with self.request('/api/state') as response:result=json.load(response)
+        self.assertTrue(result['design']['curve_configuration']['independent_eq_targets'])
+        self.assertNotIn('taps',result['design']['curve_designs']['Reference']['channels'][0])
+        with self.request('/download') as response:
+            with zipfile.ZipFile(io.BytesIO(response.read())) as archive:
+                self.assertIn('curves/Reference/FL-filter.wav',archive.namelist())
+                self.assertNotEqual(archive.read('FL-filter.wav'),archive.read('curves/Reference/FL-filter.wav'))
+
+    def test_reference_target_import_does_not_replace_the_primary_target(self):
+        body={'filename':'reference.targetcurve','curve_name':'Reference',
+              'data':base64.b64encode(b'20 6\n1000 0\n20000 -4').decode()}
+        primary=self.bench.target_curve
+        with self.request('/api/target-curve',body,self.bench.token) as response:
+            self.assertEqual(json.load(response)['name'],'reference.targetcurve')
+        self.assertIs(self.bench.target_curve,primary)
+        self.assertEqual(self.bench.reference_target_curve['level_db'][0],6)
+        with self.request('/api/target-curve',{'curve_name':'Reference','reset':True},self.bench.token) as response:
+            self.assertIsNone(json.load(response))
 
     def test_capability_assessment_and_export_are_offline_and_invalidate_with_the_project(self):
         project=Project('one position',[Measurement('FL','p0','original',ir=[0,1,0,0])],origin='synthetic')

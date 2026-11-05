@@ -12,6 +12,7 @@ import struct
 import numpy as np
 
 from .native_protocol import frame, parse_frame, _byte
+from .calibration_curves import CURVE_SPECS
 
 SAMPLE_RATE_SLOTS = {0: 32000, 1: 44100, 2: 48000}
 CURVES = (0, 1)
@@ -134,6 +135,15 @@ def audit_coefficient_streams(packets, manifest, *, fixed=False):
             raise ValueError("Native channel names or addresses are duplicated")
         if entry["coefficient_count"] != capability(entry["tier"]).shape(channel)[2]:
             raise ValueError("Native manifest differs from the Audyssey vector budget")
+        if 'curves' in entry:
+            if not isinstance(entry['curves'], dict) or set(entry['curves'])!={'0', '1'}:
+                raise ValueError('A curve-specific manifest must describe both curve slots exactly')
+            for name, spec in CURVE_SPECS.items():
+                details = entry['curves'][str(spec['curve_id'])]
+                if not isinstance(details, dict) or details.get('coefficient_count')!=entry['coefficient_count']:
+                    raise ValueError('A curve-specific manifest differs from the native vector budget')
+                if details.get('curve_name', name)!=name or details.get('calibration_field', spec['calibration_field'])!=spec['calibration_field']:
+                    raise ValueError('A curve-specific manifest has inconsistent slot names or calibration fields')
         by_address[address] = entry
         names.add(channel)
     seen, rows, current = set(), [], []
@@ -152,7 +162,8 @@ def audit_coefficient_streams(packets, manifest, *, fixed=False):
         key = (stream["address"], stream["curve"], stream["sample_rate_slot"])
         if key in seen:
             raise ValueError("A native channel/curve/rate stream is duplicated")
-        if stream["coefficient_count"] != entry["coefficient_count"] or stream["wire_sha256"] != entry["wire_sha256"]:
+        expected_values = entry['curves'][str(stream['curve'])] if 'curves' in entry else entry
+        if stream["coefficient_count"] != expected_values["coefficient_count"] or stream["wire_sha256"] != expected_values["wire_sha256"]:
             raise ValueError("Wire coefficients differ from the reviewed native manifest")
         seen.add(key)
         rows.append({"channel": entry["channel"], **{k: v for k, v in stream.items() if k != "values"}})
@@ -162,7 +173,10 @@ def audit_coefficient_streams(packets, manifest, *, fixed=False):
     expected = set(itertools.product(by_address, CURVES, SAMPLE_RATE_SLOTS))
     if seen != expected:
         raise ValueError("Native transfer does not cover every channel, both curves and all sample-rate slots")
+    distinct = sum(len({r['wire_sha256'] for r in rows if r['address']==address})>1 for address in by_address)
     return {"all_streams_complete": True, "channels": len(by_address), "streams": len(rows),
+            'curve_names': {str(v['curve_id']):name for name,v in CURVE_SPECS.items()},
+            'channels_with_distinct_curve_coefficients': distinct,
             "packets": len(packets), "packet_sha256": packet_digest(packets),
             "sample_rate_slots_hz": dict(SAMPLE_RATE_SLOTS), "curves": list(CURVES), "rows": rows,
             "hardware_verified": False,

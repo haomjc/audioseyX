@@ -10,16 +10,22 @@ from .native import compile_channel
 from .importers import save_project
 from .compat import CompatibilityDataUnavailable
 from .coefficient_transport import quantization_report
+from .calibration_curves import CURVE_SPECS, curve_designs, design_report
 
 
-def export_bundle(project, design, directory, joint=None):
+def _write_design(project, design, directory, joint=None, *, curve_name='Flat', include_measurements=True):
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
-    save_project(project, directory / "measurements.awb.json")
-    report = {key: value for key, value in design.items() if key != "channels"}
+    files = []
+    if include_measurements:
+        save_project(project, directory / "measurements.awb.json")
+        files.append(directory / 'measurements.awb.json')
+    report = design_report(design)
+    report['calibration_curve'] = curve_name
     report["joint_sub_alignment"] = joint
     report["channels"] = []
     native = {"schema": "audyssey-native-candidate-1", "tier": design["tier"],
+              'calibration_curve':curve_name, 'curve_id':CURVE_SPECS[curve_name]['curve_id'],
               "origin": project.origin, "receiver_upload_ready": False, "hardware_verified": False,
               "encoding_available": True, "float32_serialization_available": True, "channels": []}
     for item in design["channels"]:
@@ -44,6 +50,7 @@ def export_bundle(project, design, directory, joint=None):
         if not channel.replace("_", "").isalnum():
             raise ValueError('The channel name cannot be used as an export filename')
         wavfile.write(directory / (channel + "-filter.wav"), item["sample_rate"], item["taps"].astype(np.float32))
+        files.append(directory / (channel + '-filter.wav'))
         native["channels"].append({key: value.tolist() if isinstance(value, np.ndarray) else value for key, value in compiled.items()})
         report["channels"].append({key: value for key, value in item.items() if key != "taps" and not key.startswith("_")})
     (directory / "design-report.json").write_text(json.dumps(report, ensure_ascii=False, allow_nan=False, indent=2), encoding="utf-8")
@@ -67,9 +74,26 @@ def export_bundle(project, design, directory, joint=None):
     if joint:
         lines += ["", '## Shared-subwoofer alignment suggestion', "", "```json", json.dumps(joint, ensure_ascii=False, indent=2), "```"]
     (directory / 'design-report.md').write_text("\n".join(lines), encoding="utf-8")
+    files.extend(directory/name for name in ['design-report.json','design-report.md','native-candidate.json'])
+    return files
+
+
+def export_bundle(project, design, directory, joint=None):
+    directory = Path(directory)
+    curves = curve_designs(design) if design.get('curve_designs') is not None else {'Flat':design}
+    files = _write_design(project, design, directory, joint)
+    if 'Reference' in curves:
+        reference_directory = directory/'curves'/'Reference'
+        files.extend(_write_design(project, curves['Reference'], reference_directory,
+                                   curve_name='Reference', include_measurements=False))
+        path = directory/'native-candidate.json'
+        candidate = json.loads(path.read_text(encoding='utf-8'))
+        candidate.update(schema='audyssey-native-candidate-2',
+                         curve_configuration=design['curve_configuration'],
+                         additional_curve_files={'Reference':'curves/Reference/native-candidate.json'})
+        path.write_text(json.dumps(candidate, ensure_ascii=False, allow_nan=False),encoding='utf-8')
     archive = directory.with_suffix(".zip")
     with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as output:
-        for path in directory.iterdir():
-            if path.is_file():
-                output.write(path, path.name)
+        for path in files:
+            output.write(path, path.relative_to(directory).as_posix())
     return archive

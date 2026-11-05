@@ -34,4 +34,6 @@ A complete imported OCA retains an original-filter recovery copy. A settings-onl
 
 No model has completed physical validation. Packet acknowledgements and simulated tests do not establish actual reconstruction, sample-rate behavior or audible results. The project does not implement arbitrary cross-channel convolution or change the receiver DSP topology.
 
+[Independent Flat/Reference targets](calibration-curves.md) can fill the two existing slots with separate complete EQ designs. They share receiver controls and coefficient headroom; each slot has its own checked data hash. This does not add native DSP routes or validate the device's actual curve-slot behavior.
+
 The [OCA comparison](oca-comparison.md) separates implemented components from remaining native-workflow gaps. Version 0.5.0a4 splits observed framing, coefficient serialization and calibration planning into separate modules. It reconstructs all outgoing streams offline, records coefficient rounding and commits the complete review to both control and coefficient bytes. The plan is rechecked before connecting. Missing curves, rate slots, outputs, reordered fragments, altered coefficients and stale reviews are rejected. These are transport guarantees under the observed format, rather than physical DSP certification.

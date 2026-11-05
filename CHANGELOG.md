@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0a8 — independent native calibration targets
+
+- Calculate complete independent Flat/Reference minimum-phase EQ targets, retain shared training/validation references, and independently persist imported targets. Add result-curve selection and separate WAV/report/native-candidate exports.
+- Share the Flat-selected native distance/level/crossover/polarity proposal and forward-evaluate Reference with those controls fixed. Retain every repeat and routing model; held-out data never select either curve or the common controls.
+- Reserve coefficient headroom across both curves using one scale per output, or one global scale when baseline trims are unknown. Apply one common trim compensation and preserve relative digital gain.
+- Audit separate curve/slot coefficient hashes and calibration FIR associations. Bind the selected initial curve to transfer schema 4; reject stale/swapped/mislabeled data and designs from another measurement project before connecting.
+- Exercise distinct curves in offline transport self-tests and both complete XT32 targets in the packaged native-workflow benchmark. Export only current generated files from reused directories.
+
 ## 0.5.0a7 — temporal evidence and capability coverage
 
 - Retain every before/after original-IR repeat for observed-window temporal energy fractions and quality-gated descriptive EDT/T20/T30 slopes, including 20–150 Hz and octave-band analysis-filter ringing references.
