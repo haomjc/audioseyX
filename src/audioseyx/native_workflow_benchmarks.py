@@ -81,11 +81,15 @@ def run_native_workflow_benchmark(progress=None):
     checks.extend([{'name':'Known original-recording clock drift','passed':abs(before['estimated_drift_ppm']-ppm)<1.5},
                    {'name':'Corrected clock scale','passed':abs(after['estimated_drift_ppm'])<1.5},
                    {'name':'No fabricated IR or direct-arrival interpretation','passed':not mapping['deconvolution_performed'] and not before['direct_arrival_identified']}])
+    from .coupled_benchmarks import run_coupled_fixture
+    coupled=run_coupled_fixture(project,result,progress)
+    checks.extend(coupled['checks'])
     fingerprint=hashlib.sha256()
     for m in rows:fingerprint.update(m.ir.astype('<f8').tobytes())
     return {'version':__version__,'origin':'synthetic','hardware_tested':False,'sound_played':False,
             'all_passed':all(c['passed'] for c in checks),'checks':checks,'settings':settings,
             'measurement_sha256':fingerprint.hexdigest(),'receiver_calibration':native,
+            'coupled_native_fixture':coupled,
             'temporal_prediction':{'stage':temporal['stage'],'records':len(temporal['records']),
                                    'all_original_records_retained':complete_temporal,'fixed_references_and_support':fixed_references,
                                    'hardware_verified':False},

@@ -29,6 +29,8 @@ For example, two repeated scans at the centre are still one measured position; t
 
 ## What native Audyssey can still be developed
 
+Version 0.5.0a9's [coupled native planner](coupled-native.md) adds weighted-target shared main trims and joint admissible sub gain/delay/polarity/crossover selection with LFE participation. It retains full-data moments, exact native-delay queries and independent forward checks. This strengthens the offline Bass Control-related rows above; it does not change their hardware-unverified status or provide ART routes.
+
 Minimum-phase EQ, target management, same-model energy balance, documented distances/levels/crossovers, measured spatial objectives and reproducible verification can be improved without adding a playback computer. This still requires validation of microphone compensation, gain/delay order, crossover reconstruction, sample-rate behavior and normal playback. Different target tiers have different writable budgets; expanded FIR size is not the number of independent XT32 hardware parameters.
 
 Arbitrary cooperative support would require accessible per-input/per-output filters, routing, latency and headroom control, together with a verified native synthesis model. Those controls are not exposed by the inspected calibration protocol. Firmware modification is a separate unsupported engineering project, not a capability unlocked by designing more coefficients. audioseyX does not patch firmware.

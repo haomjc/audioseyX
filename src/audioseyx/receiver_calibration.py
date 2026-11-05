@@ -27,9 +27,20 @@ CONTEXTS = ('native_uncorrected', 'uncrossed_playback_eq_off')
 
 
 def smooth_risk(values, masses, weight, temperature):
-    masses = np.asarray(masses, dtype=float); masses = masses / masses.sum()
-    return (1 - weight) * (masses @ values) + weight * temperature * logsumexp(
-        values / temperature, b=masses[:, None] if values.ndim == 2 else masses, axis=0)
+    values=np.asarray(values,dtype=float);masses=np.asarray(masses,dtype=float)
+    if values.ndim not in [1,2] or masses.shape!=(values.shape[0],) or not np.isfinite(values).all() or not np.isfinite(masses).all() or np.any(masses<0) or not np.any(masses>0):
+        raise ValueError('Risk values and masses must be complete and finite')
+    if not np.isfinite([weight,temperature]).all() or not 0<=weight<=1 or temperature<=0:
+        raise ValueError('Invalid smooth-risk controls')
+    positive=masses>0;values=values[positive];masses=masses[positive]
+    masses/=masses.max();masses/=masses.sum()
+    mean=masses@values
+    if weight==0:return mean
+    reference=values.max(axis=0)
+    with np.errstate(over='ignore'):
+        shifted=(values-reference)/temperature
+    worst=reference+temperature*logsumexp(shifted,b=masses[:,None] if values.ndim==2 else masses,axis=0)
+    return worst if weight==1 else (1-weight)*mean+weight*worst
 
 
 def _linked_groups(mains, snapshot, profile, settings):
@@ -154,41 +165,100 @@ def _cost_table(grid, snapshot, settings, groups, levels, positions, selected=No
             'frequency': f, 'groups': groups, 'band_hz': [low, high], 'estimated_memory_mib': estimated}
 
 
-def _group_costs(table, losses, settings, select_best=True, chosen=None):
+def _risk_layout(table):
+    if '_risk_layout' in table:return table['_risk_layout']
+    profiles=list(table.get('curve_weights',{})) or [None]
+    if profiles!=[None]:
+        weights=np.asarray(list(table['curve_weights'].values()),dtype=float)
+        if not np.isfinite(weights).all() or np.any(weights<=0):raise ValueError('Every curve needs a positive finite risk weight')
+    layout=[]
+    for index,group in enumerate(table['groups']):
+        possible=sorted({r['crossover_hz'] for r in table['rows'] if r['group']==index},key=lambda v:-1 if v is None else v)
+        if group['current_hz'] in possible:possible=[group['current_hz']]+[v for v in possible if v!=group['current_hz']]
+        variants={}
+        for hz in possible:
+            entries={}
+            for profile in profiles:
+                indices=np.asarray([i for i,row in enumerate(table['rows']) if row['group']==index and row['crossover_hz']==hz
+                                    and (profile is None or row.get('curve_profile')==profile)],dtype=int)
+                if not len(indices):raise ValueError('Every declared curve must contribute to every crossover choice')
+                entries[profile]=(indices,np.asarray([table['rows'][i]['mass'] for i in indices]))
+            variants[hz]=entries
+        layout.append(variants)
+    table['_risk_layout']=layout
+    return layout
+
+
+def _group_costs(table, losses, settings, select_best=True, chosen=None, profile_only=None):
     risk = float(settings.get('receiver_position_risk', .35)); temperature = float(settings.get('receiver_risk_temperature', .15))
     if not 0 <= risk <= 1 or not 0 < temperature <= 10:
         raise ValueError('Invalid native calibration risk controls')
     values, choices, masses = [], [], []
     penalty = float(settings.get('receiver_crossover_change_penalty', .002))
     if not 0 <= penalty <= 10: raise ValueError('Invalid crossover-change penalty')
+    layout=_risk_layout(table)
+    curve_weights=table.get('curve_weights') if profile_only is None else None
+    curve_risk=float(settings.get('receiver_curve_risk',.35));curve_temperature=float(settings.get('receiver_curve_risk_temperature',.15))
+    if curve_weights and (not np.isfinite([curve_risk,curve_temperature]).all() or not 0<=curve_risk<=1 or not 0<curve_temperature<=10):
+        raise ValueError('Invalid shared-curve risk controls')
     for g_index, group in enumerate(table['groups']):
         variants = []; frequencies = []
-        possible = sorted({r['crossover_hz'] for r in table['rows'] if r['group'] == g_index}, key=lambda v: -1 if v is None else v)
+        possible = list(layout[g_index])
         if not select_best: possible = [chosen[group['id']]]
         for hz in possible:
-            indices = [i for i, row in enumerate(table['rows']) if row['group'] == g_index and row['crossover_hz'] == hz]
-            weight = np.array([table['rows'][i]['mass'] for i in indices])
-            variants.append(smooth_risk(losses[indices], weight, risk, temperature)
-                            + (penalty * np.log2(hz / group['current_hz'])**2 if hz is not None else 0))
+            entries=layout[g_index].get(hz)
+            if entries is None:raise ValueError('A selected native crossover is absent from the complete objective')
+            if curve_weights:
+                values_by_curve=[]
+                for name in curve_weights:
+                    selected,masses_by_curve=entries[name]
+                    values_by_curve.append(smooth_risk(losses[selected],masses_by_curve,risk,temperature))
+                value=smooth_risk(np.asarray(values_by_curve),np.asarray(list(curve_weights.values())),curve_risk,curve_temperature)
+            else:
+                indices,weight=entries[profile_only]
+                value=smooth_risk(losses[indices],weight,risk,temperature)
+            variants.append(value + (penalty * np.log2(hz / group['current_hz'])**2 if hz is not None else 0))
             frequencies.append(hz)
         variants = np.asarray(variants)
         best = np.argmin(variants, axis=0)
         values.append(np.take_along_axis(variants, best[None, :], axis=0)[0])
         choices.append(np.asarray(frequencies)[best])
-        masses.append(len(group['channels']))
+        masses.append(group.get('mass',len(group['channels'])))
     values = np.asarray(values)
     objective = smooth_risk(values, np.asarray(masses), risk, temperature)
     return objective, choices, values
 
 
-def evaluate_settings_table(table, delay, inverted, settings, crossovers=None):
-    phase = np.exp(-2j * np.pi * table['frequency'] * delay)
-    losses = table['constant'] + np.real(((-1 if inverted else 1) * table['first']) @ phase + table['second'] @ (phase**2))
+def evaluate_settings_table(table, delay, inverted, settings, crossovers=None, *, sub_gain=1.):
+    if not np.isfinite(sub_gain) or sub_gain<=0:raise ValueError('Subwoofer gain must be positive and finite')
+    if 'delay_grid_s' in table:
+        grid=table['delay_grid_s'];index=int(np.argmin(np.abs(grid-delay)))
+        if abs(grid[index]-delay)>1e-12:raise ValueError('The requested evaluation delay is not on the complete native grid')
+        g=sub_gain;c=table['gain_constant']
+        first=g*table['gain_first_linear_at_delays'][:,index]+g**3*table['gain_first_cubic_at_delays'][:,index]
+        losses=c[:,0]+g*g*c[:,1]+g**4*c[:,2]+np.real((-first if inverted else first)+g*g*table['second_at_delays'][:,index])
+    elif 'gain_constant' in table:
+        phase = np.exp(-2j * np.pi * table['frequency'] * delay)
+        g=sub_gain;c=table['gain_constant']
+        first=g*(table['gain_first_linear']@phase)+g**3*(table['gain_first_cubic']@phase)
+        losses=c[:,0]+g*g*c[:,1]+g**4*c[:,2]+np.real((-first if inverted else first)+g*g*(table['second']@(phase**2)))
+    else:
+        phase = np.exp(-2j * np.pi * table['frequency'] * delay)
+        if sub_gain!=1:raise ValueError('This objective has no declared subwoofer gain moments')
+        losses = table['constant'] + np.real(((-1 if inverted else 1) * table['first']) @ phase + table['second'] @ (phase**2))
     losses = np.maximum(losses, 0)[:, None]
     objective, choices, values = _group_costs(table, losses, settings, crossovers is None, crossovers)
-    return {'objective': float(objective[0]),
+    result = {'objective': float(objective[0]),
             'crossovers_hz': {g['id']: None if c[0] is None else float(c[0]) for g, c in zip(table['groups'], choices)},
             'group_power_error': {g['id']: float(v[0]) for g, v in zip(table['groups'], values)}}
+    if table.get('curve_weights'):
+        result['per_curve']={}
+        for name in table['curve_weights']:
+            score,_,groups=_group_costs(table,losses,settings,False,result['crossovers_hz'],profile_only=name)
+            result['per_curve'][name]={'objective':float(score[0]),
+                                      'group_power_error':{g['id']:float(v[0]) for g,v in zip(table['groups'],groups)},
+                                      'controls_reselected':False}
+    return result
 
 
 def search_native_grid(table, snapshot, profile, settings, *, progress=None, cancel=None):
@@ -240,6 +310,12 @@ def search_native_grid(table, snapshot, profile, settings, *, progress=None, can
                 linked_crossover_combinations=prod(len(g['choices_hz']) for g in table['groups']),
                 exact_minimum_over_declared_native_grid=True,
                 objective_scope='fixed_FIRs_and_explicit_power_response_model; global_acoustic_optimality_not_claimed')
+    if table.get('curve_weights'):
+        checked=evaluate_settings_table(table,best['delay_s'],best['inverted'],settings,best['crossovers_hz'])
+        best['per_curve']=checked['per_curve']
+        best['objective_without_state_penalties']=checked['objective']
+        best['curve_weights']=dict(table['curve_weights'])
+        best['objective_scope']='fixed_FIRs_and_shared_ERB_trim_state; nested_position_curve_group_risk; conditional_native_grid_minimum'
     return best
 
 
@@ -288,8 +364,9 @@ def native_routed_charts(grid, snapshot, proposal, settings, positions, referenc
             target=10**((ref+offset)/20)*(np.abs(lfe) if source=='LFE' else 1)
             for position,mass in positions.items():
                 channels=[sub] if source=='LFE' else [source,sub]
-                combinations=list(product(*(grid.groups[(c,position)] for c in channels)))
-                for combination in combinations:
+                repeated=[grid.groups[(c,position)] for c in channels]
+                scenario_count=prod(len(indices) for indices in repeated)
+                for combination in product(*repeated):
                     predictions=[]
                     for after in [False,True]:
                         predicted=np.zeros(len(frequency),complex)
@@ -310,7 +387,7 @@ def native_routed_charts(grid, snapshot, proposal, settings, positions, referenc
                                 route=np.ones_like(hp) if channel==source and large else hp if channel==source else lp if not large or snapshot.get('bass_mode')=='lfe_plus_main' else np.zeros_like(lp)
                             predicted+=value*route
                         predictions.append(predicted)
-                    scalar=mass/len(combinations);mass_total+=scalar
+                    scalar=mass/scenario_count;mass_total+=scalar
                     for n,key in enumerate(['before','after']):
                         db=20*np.log10(np.maximum(np.abs(predictions[n]),1e-15));curves[key]+=scalar*np.interp(display,frequency,db)
                         error=20*np.log10(np.maximum(np.abs(predictions[n]),1e-15)/np.maximum(target,1e-15))
@@ -329,8 +406,10 @@ def evaluate_shared_curve_controls(project, design, primary, *, cancel=None):
     settings = dict(design['settings'])
     snapshot = settings.get('receiver_snapshot', project.metadata.get('receiver_settings_snapshot', {}))
     proposal = copy.deepcopy(validate_receiver_proposal(primary, snapshot, snapshot.get('configured_channels', [])))
-    result = {'schema': 'audioseyx-shared-curve-controls-1', 'shared_settings_from': 'Flat',
+    joint=primary.get('control_selection',{}).get('mode')=='joint_curves'
+    result = {'schema': 'audioseyx-shared-curve-controls-1', 'shared_settings_from': 'joint_curves' if joint else 'Flat',
               'proposal': proposal, 'controls_selected_for_this_curve': False,
+              'participated_in_shared_control_selection':joint,
               'hardware_verified': False, 'original_ir_modified': False}
     if not primary.get('search'):
         return {**result, 'available': False,
@@ -346,6 +425,9 @@ def evaluate_shared_curve_controls(project, design, primary, *, cancel=None):
         raise ValueError('Fixed shared-curve timing evaluation requires one physical subwoofer')
     profile = primary['profile']
     groups = _linked_groups(mains, snapshot, profile, settings)
+    if primary.get('control_selection',{}).get('includes_lfe'):
+        from .native_power_model import with_lfe_group
+        groups=with_lfe_group(groups,settings)
     references = {c:grid.items[c]['metrics']['reference_level_db'] +
                   (snapshot['levels_db'][c] if settings['receiver_measurement_context']=='native_uncorrected' else 0.) for c in mains}
     if settings.get('receiver_auditory_balance', True):
@@ -358,7 +440,29 @@ def evaluate_shared_curve_controls(project, design, primary, *, cancel=None):
     internal = {**settings, 'receiver_delay_speed_m_s':primary['assumptions']['distance_delay_speed_m_s'],
                 '_receiver_target_references_db': references, '_receiver_base_distances_m': proposal['distances_m']}
     selected = {g['id']:[choices[g['id']]] for g in groups}
-    table = _cost_table(grid, snapshot, internal, groups, proposal['levels_db'], weights, selected)
+    if primary.get('control_selection',{}).get('includes_lfe'):
+        from .native_power_model import direct_power_evaluation
+        evaluation=direct_power_evaluation({'Reference':grid},snapshot,{'Reference':internal},groups,
+                                            proposal,weights,{'Reference':1.},choices,cancel)
+        charts=native_routed_charts(grid,snapshot,proposal,internal,weights,references)
+        band=[float(internal.get('receiver_analysis_low_hz',20)),float(internal.get('receiver_analysis_high_hz',min(20000,grid.high,grid.rate*.42)))]
+        del grid
+        held_evaluation=None
+        if validation:
+            held=Project(project.name,[m for m in project.measurements if m.position in validation],
+                         project.origin,project.model,project.tier,dict(project.metadata))
+            held_grid=SpectralGrid(held,design,memory_mib=float(settings.get('receiver_memory_mib',512)),cancel=cancel)
+            held_settings={**internal,'position_weights':{},'receiver_analysis_low_hz':band[0],'receiver_analysis_high_hz':band[1]}
+            value=direct_power_evaluation({'Reference':held_grid},snapshot,{'Reference':held_settings},groups,
+                                           proposal,position_weights(held,held_settings),{'Reference':1.},choices,cancel)
+            held_evaluation={'positions':sorted(validation),'used_for_design':False,'references_from_training':True,
+                             'renormalized_after_design':False,'evaluation':value}
+        return {**result,'available':True,'training_positions':sorted(weights),'validation_positions':sorted(validation),
+                'fixed_training_target_references_db':references,'evaluation':evaluation,'independent_validation':held_evaluation,
+                'routed_charts':charts,'direct_complete_response_evaluation':True,
+                'notice':'The alternate EQ is evaluated by direct complete complex sums at the common selected controls, including LFE. No second menu search, target fit or holdout normalization occurs.'}
+    builder=_cost_table
+    table = builder(grid, snapshot, internal, groups, proposal['levels_db'], weights, selected)
     evaluation = evaluate_settings_table(table, 0., subs[0] in proposal['inverted_outputs'], internal, choices)
     band = table['band_hz']; del table
     charts = native_routed_charts(grid, snapshot, proposal, internal, weights, references)
@@ -369,14 +473,14 @@ def evaluate_shared_curve_controls(project, design, primary, *, cancel=None):
         held_grid = SpectralGrid(held, design, memory_mib=float(settings.get('receiver_memory_mib', 512)), cancel=cancel)
         held_settings = {**internal, 'position_weights':{}, 'receiver_analysis_low_hz':band[0], 'receiver_analysis_high_hz':band[1]}
         held_weights = position_weights(held, held_settings)
-        table = _cost_table(held_grid, snapshot, held_settings, groups, proposal['levels_db'], held_weights, selected)
+        table = builder(held_grid, snapshot, held_settings, groups, proposal['levels_db'], held_weights, selected)
         held_evaluation = {'positions':sorted(validation), 'used_for_design':False,
                            'references_from_training':True, 'renormalized_after_design':False,
                            'evaluation':evaluate_settings_table(table, 0., subs[0] in proposal['inverted_outputs'], held_settings, choices)}
     return {**result, 'available':True, 'training_positions':sorted(weights), 'validation_positions':sorted(validation),
             'fixed_training_target_references_db':references, 'evaluation':evaluation,
             'independent_validation':held_evaluation, 'routed_charts':charts,
-            'notice':'Reference EQ evaluated with the Flat-selected distance/level/crossover/polarity proposal held fixed. Every recorded repeat and routing-model alternative is retained. No second menu search, trim balancing or target normalization uses holdout data.'}
+            'notice':'Reference EQ forward-evaluated with the selected common distance/level/crossover/polarity proposal held fixed. Selection source and participation are recorded separately. Every repeat and routing-model alternative is retained; holdouts never refit controls or references.'}
 
 
 def calibrate_receiver(project, design, settings, *, progress=None, cancel=None):

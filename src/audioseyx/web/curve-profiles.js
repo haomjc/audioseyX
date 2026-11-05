@@ -15,7 +15,10 @@ function initCurveProfileControls(){
 function calibrationCurveSettings(){
  if(!$('dual-calibration-curves').checked)return {};
  if(!['minimum','receiver'].includes($('phase-mode').value))throw new Error('Choose minimum-phase EQ or native receiver planning for two native curves.');
- return {curve_profiles:{Reference:{
+ return {receiver_curve_control_mode:$('curve-control-mode').value,
+ receiver_curve_weights:{Flat:Number($('curve-flat-priority').value),Reference:100-Number($('curve-flat-priority').value)},
+ receiver_curve_risk:Number($('curve-risk').value),receiver_curve_risk_temperature:Number($('curve-risk-temperature').value),
+ curve_profiles:{Reference:{
   low_hz:Number($('reference-low').value),high_hz:Number($('reference-high').value),sub_high_hz:Number($('reference-sub-high').value),
   max_boost_db:Number($('reference-boost').value),max_cut_db:Number($('reference-cut').value),
   bass_db:Number($('reference-bass').value),tilt_db_oct:Number($('reference-tilt').value),
@@ -39,12 +42,17 @@ function renderCurveProfiles(current){
  const primary=current.design;
  const dual=!!primary?.curve_designs?.Reference;
  if(primary){
-  const resultSignature=primary.project_id+'|'+JSON.stringify(primary.settings.curve_profiles||null);
+  const resultSignature=primary.project_id+'|'+JSON.stringify([primary.settings.curve_profiles||null,primary.settings.receiver_curve_control_mode,primary.settings.receiver_curve_weights,primary.settings.receiver_curve_risk]);
   if(resultSignature!==lastCurveProfileResult){
    lastCurveProfileResult=resultSignature;$('dual-calibration-curves').checked=dual;
    $('reference-curve-options').classList.toggle('hidden',!dual);
    if(dual){
     const settings=primary.curve_designs.Reference.settings;
+    const common=primary.settings;
+    $('curve-control-mode').value=common.receiver_curve_control_mode||'primary';
+    if(common.receiver_curve_weights?.Reference!==undefined){const w=common.receiver_curve_weights;$('curve-flat-priority').value=100*w.Flat/(w.Flat+w.Reference)}
+    if(common.receiver_curve_risk!==undefined)$('curve-risk').value=common.receiver_curve_risk;
+    if(common.receiver_curve_risk_temperature!==undefined)$('curve-risk-temperature').value=common.receiver_curve_risk_temperature;
     for(const [id,key] of [['reference-low','low_hz'],['reference-high','high_hz'],['reference-sub-high','sub_high_hz'],['reference-boost','max_boost_db'],['reference-cut','max_cut_db'],['reference-bass','bass_db'],['reference-tilt','tilt_db_oct'],['reference-smoothing','smoothing_octave']]){
      if(settings[key]!==undefined)$(id).value=settings[key];
     }

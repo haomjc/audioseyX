@@ -251,6 +251,10 @@ def design_project(project, tier, settings, progress=None, *, cancel=None):
     optimizer = settings.get("optimizer", "independent")
     if optimizer not in ["independent", "native_joint", "native_calibration"]:
         raise ValueError("Unknown filter-design optimizer")
+    engine=settings.get('receiver_control_engine','legacy')
+    if engine not in ['legacy','coupled']:raise ValueError('Unknown native receiver control engine')
+    if optimizer=='native_calibration' and settings.get('receiver_curve_control_mode')=='joint':
+        raise ValueError('Joint curve control selection requires both complete calibration curves')
     if optimizer == 'native_calibration' and settings.get('phase_mode', 'minimum') != 'minimum':
         raise ValueError('Native-menu calibration uses a minimum-phase EQ base; arbitrary mixed-phase references remain separate')
     if optimizer == "native_joint":
@@ -275,9 +279,14 @@ def design_project(project, tier, settings, progress=None, *, cancel=None):
         result['independent_validation']={'positions':validation,'used_for_design':False,
             'channels':[evaluate_channel_filter([m for m in project.measurements if m.channel==item['channel'] and m.position in validation],item,settings) for item in output]}
     if optimizer == 'native_calibration':
-        from .receiver_calibration import calibrate_receiver
-        result['receiver_calibration'] = calibrate_receiver(project, result, settings, progress=progress, cancel=cancel)
+        if engine=='coupled':
+            from .joint_curve_controls import calibrate_joint_curves
+            result['receiver_calibration']=calibrate_joint_curves(project,{'Flat':result},settings,progress=progress,cancel=cancel)
+        else:
+            from .receiver_calibration import calibrate_receiver
+            result['receiver_calibration'] = calibrate_receiver(project, result, settings, progress=progress, cancel=cancel)
         charts=result['receiver_calibration'].pop('routed_charts',[])
+        result['receiver_calibration'].pop('curve_routed_charts',None)
         if charts:result['routed_charts']=charts
         else:
             for item in result['channels']:

@@ -23,6 +23,7 @@ from .coefficient_transport import quantization_report, audit_coefficient_stream
 from .native_protocol import acknowledgement
 from .receiver_constraints import validate_receiver_proposal
 from .calibration_curves import CURVE_SPECS, PROFILE_KEYS, curve_designs, fir_fingerprint
+from .headroom import required_headroom_db
 
 PLAN_SCHEMA = "audioseyx-native-transfer-4"
 
@@ -238,8 +239,7 @@ def prepare_transfer(project, design, template, receiver):
         for curve, items in designs.items():
             for name, item in items.items():
                 peaks += [float(np.max(np.abs(item["taps"]))), float(np.max(np.abs(encoded[curve][name]["coefficients"])))]
-        needed = max(0., 20 * np.log10(max(max(peaks), 1e-15) / .5))
-        global_scale = 10 ** (-np.ceil(needed * 10 - 1e-9) / 10 / 20)
+        global_scale = 10 ** (-required_headroom_db(max(peaks))/20)
     for channel in out["channels"]:
         name = channel["commandId"]
         address = addresses.get(name, {}).get(family)
@@ -248,8 +248,7 @@ def prepare_transfer(project, design, template, receiver):
         used.add(address)
         peak = max(max(float(np.max(np.abs(encoded[curve][name]['coefficients']))),
                        float(np.max(np.abs(designs[curve][name]['taps'])))) for curve in curves)
-        needed = max(0., 20 * np.log10(max(peak, 1e-15) / .5))
-        scale = global_scale if settings_only else 10 ** (-np.ceil(needed * 10 - 1e-9) / 10 / 20)
+        scale = global_scale if settings_only else 10 ** (-required_headroom_db(peak)/20)
         compensation = -20 * np.log10(scale)
         trim = None if settings_only and not receiver_proposal else float(channel["trimAdjustmentInDbs"]) + float(compensation)
         if trim is not None and not -12 <= trim <= 12:
@@ -313,6 +312,7 @@ def prepare_transfer(project, design, template, receiver):
                'receiver_settings_included': bool(receiver_proposal),
                'receiver_settings_proposal': receiver_proposal,
                'receiver_model_assumptions': design.get('receiver_calibration', {}).get('assumptions') if receiver_proposal else None,
+               'receiver_control_selection': copy.deepcopy(design.get('receiver_calibration', {}).get('control_selection')) if receiver_proposal else None,
                'headroom_compensated_by_channel_levels': bool(not settings_only or receiver_proposal),
                "coefficient_quantization": {
                    "maximum_absolute_error": max(row["maximum_absolute_error"] for row in precision_rows),

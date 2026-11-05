@@ -71,6 +71,26 @@ class HttpWorkflowTests(unittest.TestCase):
             self.assertIn(b'renderCapabilityAssessment',response.read())
         with self.request('/curve-profiles.js') as response:
             self.assertIn(b'calibrationCurveSettings',response.read())
+        with self.request('/processing-controls.js') as response:
+            self.assertIn(b'restoreProcessingControls',response.read())
+
+    def test_coupled_native_api_retains_both_targets_lfe_and_unactivated_restore_controls(self):
+        from test_receiver_calibration import fixture
+        p,_,_,settings=fixture(positions=('p0','p1'))
+        self.bench.set_project(p)
+        settings.update(tier='XT32',optimizer='native_calibration',receiver_control_engine='coupled',
+                        receiver_curve_control_mode='joint',curve_profiles={'Reference':{'bass_db':3}},
+                        receiver_max_delay_ms=.1,receiver_sub_level_min_db=0.,receiver_sub_level_max_db=0.,validation_positions=['p1'])
+        with self.request('/api/design',settings,self.bench.token) as response:self.assertIn(json.load(response)['status'],['running','complete'])
+        self.wait_design()
+        self.assertEqual(self.bench.job['status'],'complete',self.bench.job)
+        with self.request('/api/state') as response:current=json.load(response)
+        cal=current['design']['receiver_calibration']
+        self.assertEqual(cal['control_selection']['mode'],'joint_curves')
+        self.assertIn('LFE',cal['evaluation']['group_power_error'])
+        self.assertEqual(set(cal['evaluation']['per_curve']),{'Flat','Reference'})
+        self.assertFalse(current['saved_design_settings']['timing_confirmed'])
+        self.assertIsNone(current['receiver'])
 
     def test_two_curve_design_has_distinct_public_results_and_complete_download(self):
         import zipfile

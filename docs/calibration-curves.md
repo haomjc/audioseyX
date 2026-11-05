@@ -14,7 +14,7 @@ These are static alternatives. They do not provide Dynamic EQ, automatic playbac
 
 ## Common receiver controls
 
-Speaker distances, channel trims, crossover settings and sub-filter polarity are common to both curves. For native receiver calibration, **Flat selects the menu proposal**. Reference is forward-evaluated with those controls fixed and its own training-derived target references. It does not run another menu search or change the shared state. This is not a global joint optimum across both targets.
+Speaker distances, channel trims, crossovers, sub level and filter polarity are common to both curves. The UI's [coupled native engine](coupled-native.md) can select controls from both weighted targets, including LFE, or prioritize Flat and evaluate Reference at that state. Main ERB trims and complete FIRs remain fixed during the gain/delay/crossover search; this is not a global joint optimum across all parameters. Python clients without the new engine/mode settings retain primary-target compatibility.
 
 The Reference evaluation retains all repeats, routing-model alternatives and validation positions. Held-out data never select controls or refit either curve. If the primary proposal is level-only, routed timing evaluation is explicitly unavailable and Reference plots show EQ only. Two targets do not resolve missing seats, unmeasured outputs or unverified native reconstruction.
 

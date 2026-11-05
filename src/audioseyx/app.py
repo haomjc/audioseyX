@@ -31,6 +31,7 @@ from .comparison import compare_projects
 from .compat import compatibility_status
 from .feature_coverage import capability_assessment
 from .calibration_curves import design_report
+from .saved_controls import make_saved_controls, load_saved_controls
 
 
 def public_design(design):
@@ -68,6 +69,8 @@ class Workbench:
         self.clock_reference_path = None
         self.target_curve = None
         self.reference_target_curve = None
+        self.saved_design_settings = None
+        self.saved_controls_restored = False
         self.log('Workbench started. No receiver has been connected or modified.')
         for attribute, filename in [('target_curve','target-curve.json'), ('reference_target_curve','reference-target-curve.json')]:
             curve_file = self.home / filename
@@ -93,6 +96,11 @@ class Workbench:
                 self.log('Restored the last saved project.')
             except (ValueError, OSError):
                 self.log('The last project could not be restored. Please import the measurements again.')
+        try:
+            self.saved_design_settings=load_saved_controls(self.home/'last-design-settings.json',self.project)
+            self.saved_controls_restored=self.saved_design_settings is not None
+        except (ValueError,OSError,TypeError,RecursionError):
+            self.log('Saved controls could not be restored; default controls are shown. No job was started.')
 
     def log(self, text):
         self.events.append({"time": time.strftime("%H:%M:%S"), "message": str(text)})
@@ -103,7 +111,8 @@ class Workbench:
                 "features":{"full_complex_joint_fir":True,"native_synthesis_models":True,"per_frequency_fdw":True,
                             "variable_channel_layouts":True,"read_only_receiver_settings":True,
                             'native_receiver_calibration':True,'auditory_band_balance':True,'raw_clock_correction':True,
-                            'temporal_verification':True,'capability_assessment':True,'independent_native_curves':True},
+                            'temporal_verification':True,'capability_assessment':True,'independent_native_curves':True,
+                            'coupled_native_controls':True,'data_linked_saved_controls':True},
                 'capability_assessment': capability_assessment(self.project),
                 "project": self.project.summary() if self.project else None,
                 "design": public_design(self.design), "joint": self.joint, "job": dict(self.job),
@@ -115,7 +124,9 @@ class Workbench:
                 "polarity":self.polarity_report,
                 'clock':self.clock_result,
                 "target_curve": {"name": self.target_curve["name"], "points": len(self.target_curve["frequency"])} if self.target_curve else None,
-                'reference_target_curve': {'name':self.reference_target_curve['name'], 'points':len(self.reference_target_curve['frequency'])} if self.reference_target_curve else None}
+                'reference_target_curve': {'name':self.reference_target_curve['name'], 'points':len(self.reference_target_curve['frequency'])} if self.reference_target_curve else None,
+                'saved_design_settings':self.saved_design_settings,'saved_controls_restored':self.saved_controls_restored,
+                'showing_previous_design':self.design is not None and self.job.get('kind')=='design' and self.job['status'] in ['running','failed','cancelled']}
 
     def transfer_state(self):
         return {"template": {"model": self.template["model"], "tier": self.template["eqType"],
@@ -141,6 +152,8 @@ class Workbench:
         self.polarity_report = None
         self.polarity_path = None
         self.transfer_plan = None
+        self.saved_design_settings = None
+        self.saved_controls_restored = False
         self.log(f"Imported {project.name}：{len(project.channels)} channels, {len(project.measurements)} measurements.")
         return project.summary()
 
@@ -190,9 +203,6 @@ class Workbench:
                 cached = self.receiver.get('web_settings', {}) if self.receiver and self.receiver.get('connected') else project.metadata.get('receiver_settings_snapshot', {})
                 settings['receiver_snapshot'] = copy.deepcopy(cached)
             self.transfer_plan = None
-            self.design = None
-            self.joint = None
-            self.export_path = None
             self.design_cancel = threading.Event()
             self.job = {"status": "running", "kind":"design", "progress": 0, "message": 'Preparing measurements and device formats'}
         def progress(number, message):
@@ -200,28 +210,46 @@ class Workbench:
         def run():
             try:
                 settings["timing_confirmed"] = settings.get("timing_confirmed") is True
-                project.metadata["timing_confirmed"] = settings["timing_confirmed"]
-                design = design_project(project, settings.get("tier", project.tier or "XT32"), settings, progress, cancel=self.design_cancel)
+                analysis_project=Project(project.name,list(project.measurements),project.origin,project.model,project.tier,
+                                         {**copy.deepcopy(project.metadata),'timing_confirmed':settings['timing_confirmed']},
+                                         list(project.warnings),id=project.id)
+                design = design_project(analysis_project, settings.get("tier", project.tier or "XT32"), settings, progress, cancel=self.design_cancel)
                 if self.design_cancel.is_set():
                     raise InterruptedError("Filter design cancelled")
                 progress(90, 'Evaluating shared-subwoofer alignment')
                 joint = ({"available":True,"kind":"full_joint_fir","optimization":design["joint_optimization"],
                           "evaluation":design["joint_evaluation"],"model":design["joint_model"]}
                          if design.get("joint_model") else {'available':False,'reason':'Native receiver calibration has its own complete timing/crossover result; no second alignment is applied.'} if design.get('receiver_calibration')
-                         else joint_sub_alignment(project, design, float(settings.get("crossover_hz", 80))))
+                         else joint_sub_alignment(analysis_project, design, float(settings.get("crossover_hz", 80))))
                 progress(95, 'Compiling candidate formats and exporting reports')
                 path = export_bundle(project, design, self.home / "exports" / (project.id + "-" + str(time.time_ns())), joint)
+                saved=None;temporary=None
+                try:
+                    document=make_saved_controls(project,settings)
+                    temporary=self.home/('controls-'+secrets.token_hex(6)+'.tmp.json')
+                    temporary.write_text(json.dumps(document,ensure_ascii=False,allow_nan=False),encoding='utf-8')
+                    saved=document['settings']
+                except (ValueError,TypeError,OSError):
+                    self.log('The design is complete, but processing controls could not be saved for restart.')
                 with self.lock:
                     if self.design_cancel.is_set():
+                        if temporary is not None:temporary.unlink(missing_ok=True)
                         raise InterruptedError("Filter design cancelled; no result was activated")
+                    if temporary is not None and saved is not None:
+                        try:temporary.replace(self.home/'last-design-settings.json')
+                        except OSError:
+                            saved=None
+                            self.log('Processing controls could not be committed; the completed design remains available.')
                     self.design, self.joint, self.export_path = design, joint, path
+                    self.saved_design_settings=saved
+                    self.saved_controls_restored=False
                     self.job = {"status": "complete", "progress": 100, "message": 'Design and export complete'}
                 self.log('Completed channel designs, available candidate encoding and reports. Nothing has been written to the receiver.')
             except InterruptedError as error:
                 self.job={"status":"cancelled","kind":"design","progress":0,"message":str(error)}
                 self.log(str(error))
             except Exception as error:
-                self.job = {"status": "failed", "progress": 0, "message": str(error)}
+                self.job = {"status": "failed", "kind":"design", "progress": 0, "message": str(error)}
                 self.log('Design incomplete: ' + str(error))
         threading.Thread(target=run, daemon=True).start()
         return dict(self.job)

@@ -14,7 +14,7 @@ if "site-packages" not in package.parts:
     raise SystemExit("This check must import a wheel installed in site-packages")
 if any((package / name).exists() for name in ["native_tables.json", "channel_addresses.json"]):
     raise SystemExit("Private compatibility resources must not be installed")
-for name in ["index.html", "app.js", "analysis.js", "downloads.js", "joint.js", "layouts.js", "polarity.js", "transfer.js", "receiver-calibration.js", "clock.js", "verification.js", "curve-profiles.js", "style.css"]:
+for name in ["index.html", "app.js", "analysis.js", "downloads.js", "joint.js", "layouts.js", "polarity.js", "transfer.js", "receiver-calibration.js", "clock.js", "verification.js", "curve-profiles.js", "processing-controls.js", "style.css"]:
     if not (package / "web" / name).is_file():
         raise SystemExit("Installed web asset missing: " + name)
 report = self_test()

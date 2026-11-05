@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0a9 — coupled native bass planning and restart-safe processing
+
+- Select shared sub level, delay, polarity and linked crossovers with LFE participation, for one target or weighted Flat/Reference targets. Keep conditional exactness separate from joint FIR/main-trim optimality and hardware validity.
+- Share a native-grid ERB Huber trim state across both targets; enforce known coefficient-reserve limits and retain independent per-curve evidence.
+- Retain all response bins/repeats through complete Cartesian second/fourth moments and native-delay ZoomFFT sums. Preallocate bounded state storage, cache risk layouts and vectorize gain/delay batches.
+- Directly recompute complete complex-response power at selected and validation states; reject numerical inconsistencies and protect frozen training references.
+- Keep original measurement metadata immutable, retain the last result after cancelled/failed replacements, and atomically save data-linked interface defaults with all confirmations reset.
+- Reuse joint Reference evaluations, avoid materializing repeat Cartesian products, and expand full-layout known-gain/timing/LFE benchmarks.
+
 ## 0.5.0a8 — independent native calibration targets
 
 - Calculate complete independent Flat/Reference minimum-phase EQ targets, retain shared training/validation references, and independently persist imported targets. Add result-curve selection and separate WAV/report/native-candidate exports.

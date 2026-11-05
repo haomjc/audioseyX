@@ -61,6 +61,9 @@ The pure-delay example has a peak time of 4 ms after accounting for the original
 | `feature_coverage` | `capability_assessment(project=None)` | Engineering checklist and current project evidence; no performance percentage |
 | `calibration_curves` | `curve_designs(design)` | Complete Flat/Reference designs with common geometry validation |
 | `receiver_calibration` | `evaluate_shared_curve_controls(project, design, primary)` | Alternate-target evaluation with primary-selected controls fixed |
+| `joint_curve_controls` | `calibrate_joint_curves(project, curves, settings)` | Coupled common native controls for one/two complete targets |
+| `native_power_model` | `build_native_delay_table(...)` | All-frequency repeat moments evaluated at every native delay |
+| `coupled_native_search` | `search_coupled_native_grid(...)` | Conditional sub gain/delay/polarity/crossover finite-grid minimum |
 
 ## Local web API
 
@@ -71,6 +74,8 @@ The web API is an implementation detail of the desktop workflow. It binds to loo
 For [independent calibration curves](calibration-curves.md), `POST /api/target-curve` accepts `curve_name="Flat"` (default) or `"Reference"`. Imports persist independently and invalidate the current bundle. `curve_profiles` in `/api/design` requests two complete designs. `/api/transfer/prepare` additionally accepts `initial_curve="Flat"` or `"Reference"`, committed to the reviewed byte transaction. No design or target import contacts a receiver.
 
 ## CLI
+
+See [coupled native planning](coupled-native.md) for engine selection, positive curve priorities, LFE participation, coefficient reservation and numerical/direct checks. Saved interface controls are linked to the original dataset and never restore measurement or transfer consent.
 
 ```text
 audioseyx [--port PORT] [--no-browser] [--data-dir DIRECTORY]
