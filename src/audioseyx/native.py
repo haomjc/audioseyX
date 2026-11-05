@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
-import struct
 import numpy as np
 
 from .capabilities import capability
 from .compat import load_native_tables
+from .native_protocol import frame, parse_frame
+from .coefficient_transport import coefficient_packets
 
 
 def pack_xt32(samples, is_sub=False):
@@ -71,45 +70,3 @@ def compile_channel(item, tier):
     return {"channel": item["channel"], "codec": "supplied_native_synthesis" if supplied is not None else cap.codec, "design_rate": fs,
             "design_length": length, "coefficient_count": len(coefficients),
             "coefficients": coefficients, "hardware_verified": False}
-
-
-def frame(command, payload=b"", sequence=0, last=0):
-    command_bytes = command.encode("ascii")
-    if len(command_bytes) != 10 or len(payload) > 65500:
-        raise ValueError('Invalid receiver command or frame length')
-    body = bytes([sequence, last]) + command_bytes + b"\x00" + struct.pack(">H", len(payload)) + payload
-    packet = b"\x54" + struct.pack(">H", len(body) + 4) + body
-    return packet + bytes([sum(packet) & 255])
-
-
-def parse_frame(packet):
-    if len(packet) < 19 or packet[0] not in (0x52, 0x54):
-        raise ValueError('Invalid receiver response frame header')
-    length = struct.unpack_from(">H", packet, 1)[0]
-    if length != len(packet) or sum(packet[:-1]) & 255 != packet[-1]:
-        raise ValueError('Receiver response length or checksum mismatch')
-    command = packet[5:15].decode("ascii")
-    payload_size = struct.unpack_from(">H", packet, 16)[0]
-    if payload_size + 19 > len(packet):
-        raise ValueError('Invalid receiver response payload length')
-    return command, packet[18:18 + payload_size]
-
-
-def coefficient_packets(coefficients, channel_byte, curve=0, sample_rate_slot=2, fixed=False):
-    data = np.asarray(coefficients, dtype=float)
-    if not np.isfinite(data).all() or not 1 <= len(data) <= 16384:
-        raise ValueError('Invalid coefficient payload')
-    if np.max(np.abs(data)) > np.finfo(np.float32).max:
-        raise ValueError('Coefficients exceed the float32 range')
-    if fixed:
-        if np.max(np.abs(data)) >= 1:
-            raise ValueError('Fixed-point coefficients exceed Q31 range; silent saturation is not allowed')
-        # Use the observed two's-complement-style quantization for negatives.
-        integers = np.where(data < 0, -np.floor(np.abs(data) * (2 ** 31)) - 1, np.floor(data * (2 ** 31))).astype("<i4")
-        raw = integers.tobytes()
-    else:
-        raw = data.astype("<f4").tobytes()
-    chunks = [raw[:127 * 4]]
-    chunks += [raw[i:i + 128 * 4] for i in range(127 * 4, len(raw), 128 * 4)]
-    return [frame("SET_COEFDT", bytes([curve, sample_rate_slot, channel_byte, 0]) + chunk if i == 0 else chunk, i, len(chunks) - 1)
-            for i, chunk in enumerate(chunks)]

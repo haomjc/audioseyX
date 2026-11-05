@@ -4,7 +4,7 @@
 
 audioseyX brings measurement files, REW integration, room analysis and Audyssey-aware filter design into one local interface. It preserves individual microphone positions and original response timing, evaluates the actual truncated filters, and keeps numerical predictions separate from hardware and acoustic verification.
 
-**Status: 0.5.0a3, an experimental public preview.** PyPI publishing and the Read the Docs site are being configured; a local build does not establish that either service is live. Read-only information, speaker settings and Float capture transport have been checked on an X3700H. Microphone compensation, normal-playback reconstruction and transfer remain unverified. This project is independent of Audyssey, Denon, Marantz and Dirac.
+**Status: 0.5.0a4, an experimental public preview.** PyPI publishing and the Read the Docs site are being configured; a local build does not establish that either service is live. Read-only information, speaker settings and Float capture transport have been checked on an X3700H. Microphone compensation, normal-playback reconstruction and transfer remain unverified. This project is independent of Audyssey, Denon, Marantz and Dirac.
 
 ## What works offline
 
@@ -67,6 +67,8 @@ X3700H Float capture transport, including individual subwoofer commands, has now
 The private 0.3 research prototype is separate from this public source tree. Its local compatibility vectors are not evidence of a license to redistribute them and are not included here.
 
 This is not an implementation of Dirac ART's arbitrary cross-channel support matrix. It does not modify receiver firmware or add routing paths to the existing DSP.
+
+See the [OCA replacement status](docs/oca-comparison.md) for implemented components and remaining native-workflow gaps.
 
 The new joint mode is export-only. A feasible improving filter can be returned before numerical convergence, and expanded XT32 taps do not establish writable native realizability. See [joint design](docs/joint-design.md) for the model, full-layout benchmark, supplied native synthesis format and limits. No same-data OCA/GSonic comparison has been established.
 

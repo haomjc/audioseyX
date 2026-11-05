@@ -6,6 +6,8 @@ from .model import Measurement
 from .dsp import design_channel
 from .native import compile_channel, frame
 from .compat import CompatibilityDataUnavailable, compatibility_status
+from .capabilities import capability
+from .coefficient_transport import coefficient_packets, quantization_report, audit_coefficient_streams
 
 
 def self_test():
@@ -29,6 +31,25 @@ def self_test():
             except Exception as error:
                 checks.append({"name": f"{tier} / {channel}", "passed": False, "error": str(error)})
     checks.append({"name": 'Known protocol frame', "passed": frame("ENTER_AUDY").hex() == "5400130000454e5445525f4155445900000077"})
+    for tier in ["MultEQ", "XT", "XT32"]:
+        for fixed in [False, True]:
+            try:
+                manifest, packets = [], []
+                for address, channel in [(101, "FL"), (102, "SW1")]:
+                    # Artificial transport vectors and addresses, with no
+                    # dependency on the private XT32 synthesis/encoding data.
+                    values = np.zeros(capability(tier).shape(channel)[2]); values[0] = .25
+                    manifest.append({"channel": channel, "address": address, "tier": tier,
+                                     **quantization_report(values, fixed)})
+                    for curve in [0, 1]:
+                        for slot in [0, 1, 2]:
+                            packets.extend(coefficient_packets(values, address, curve, slot, fixed))
+                audit = audit_coefficient_streams(packets, manifest, fixed=fixed)
+                checks.append({"name": f"Synthetic native transport / {tier} / {'Q31' if fixed else 'Float32'}",
+                               "passed": audit["all_streams_complete"], "streams": audit["streams"],
+                               "native_encoding_checked": False, "hardware_tested": False})
+            except Exception as error:
+                checks.append({"name": f"Synthetic native transport / {tier}", "passed": False, "error": str(error)})
     return {"version": __version__, "platform": platform.platform(), "all_passed": all(c["passed"] for c in checks),
             "checks": checks, "compatibility": compatibility_status(), "hardware_tested": False,
             "notice": 'Offline design self-test. Native encoding checks are explicitly marked unexecuted when local compatibility data are missing. No sound is played and no receiver is connected.'}

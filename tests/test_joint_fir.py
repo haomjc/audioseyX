@@ -428,6 +428,8 @@ class NativeSynthesisTests(unittest.TestCase):
                 self.assertTrue(candidate["encoding_available"])
                 self.assertEqual(candidate["channels"][0]["coefficient_count"],1024)
                 self.assertFalse(candidate["receiver_upload_ready"])
+                self.assertTrue(candidate['float32_serialization_available'])
+                self.assertEqual(candidate['channels'][0]['float32_precision']['coefficient_count'],1024)
 
     def test_supplied_native_parameters_survive_uniform_scaling_and_reject_stale_firs(self):
         code=np.zeros(1024);code[0]=.5;code[10]=.2

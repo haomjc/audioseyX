@@ -9,6 +9,7 @@ from scipy.io import wavfile
 from .native import compile_channel
 from .importers import save_project
 from .compat import CompatibilityDataUnavailable
+from .coefficient_transport import quantization_report
 
 
 def export_bundle(project, design, directory, joint=None):
@@ -20,14 +21,23 @@ def export_bundle(project, design, directory, joint=None):
     report["channels"] = []
     native = {"schema": "audyssey-native-candidate-1", "tier": design["tier"],
               "origin": project.origin, "receiver_upload_ready": False, "hardware_verified": False,
-              "encoding_available": True, "channels": []}
+              "encoding_available": True, "float32_serialization_available": True, "channels": []}
     for item in design["channels"]:
         try:
             if design.get('joint_optimization',{}).get('design_space')=='expanded_causal_fir_reference':
                 raise CompatibilityDataUnavailable('Expanded joint FIR references are not native coefficient designs. Supply a native synthesis model; hardware validation remains required.')
             compiled = compile_channel(item, design["tier"])
+            try:
+                compiled["float32_precision"] = {"available": True,
+                    **quantization_report(compiled["coefficients"])}
+            except ValueError as error:
+                # General reference WAVs remain useful even when a supplied
+                # native parameterization cannot serialize to Float32.
+                native["float32_serialization_available"] = False
+                compiled["float32_precision"] = {"available": False, "reason": str(error)}
         except CompatibilityDataUnavailable as error:
             native["encoding_available"] = False
+            native["float32_serialization_available"] = False
             native["encoding_unavailable_reason"] = str(error)
             compiled = {"channel": item["channel"], "encoding_available": False, "reason": str(error)}
         channel = item["channel"]

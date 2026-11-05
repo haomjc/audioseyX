@@ -7,7 +7,8 @@ import numpy as np
 from audioseyx.model import Measurement, Project
 from audioseyx.dsp import design_project
 from audioseyx.native import frame, parse_frame
-from audioseyx.transfer import validate_template, prepare_transfer, apply_plan, template_from_receiver, canonical_model
+from audioseyx.transfer import (validate_template, prepare_transfer, apply_plan, template_from_receiver,
+                               canonical_model, audit_transfer_plan, transfer_plan_digest)
 
 
 def example():
@@ -54,6 +55,57 @@ class FakeReceiver:
 
 
 class TransferTests(unittest.TestCase):
+    def test_reviewed_digest_commits_to_device_settings_and_exact_wire_bytes(self):
+        plan = prepare_transfer(*example())
+        self.assertTrue(audit_transfer_plan(plan)["all_streams_complete"])
+        self.assertEqual(plan["summary"]["coefficient_transport_audit"]["streams"], 12)
+        for kind in ["host", "settings", "levels", "native_manifest", "wire", "calibration", "summary"]:
+            changed = copy.deepcopy(plan)
+            if kind == "host": changed["summary"]["host"] = "127.0.0.2"
+            elif kind == "settings": changed["settings"]["AudyDynEq"] = True
+            elif kind == "levels": changed["levels"]["ChLevel"][0]["FL"] += 1
+            elif kind == "native_manifest": changed["native_manifest"][0]["address"] += 1
+            elif kind == "wire": changed["packets"][0] = changed["packets"][0][:-1] + b"\x00"
+            elif kind == "calibration": changed["calibration"]["channels"][0]["filter"][0] += .01
+            else: changed["summary"]["global_headroom_db"] += 1
+            with self.subTest(kind=kind), patch("audioseyx.transfer.socket.create_connection") as connect:
+                with self.assertRaisesRegex(ValueError, "changed"):
+                    apply_plan(changed)
+                connect.assert_not_called()
+
+    def test_a_fresh_digest_does_not_hide_a_missing_rate_stream(self):
+        plan = prepare_transfer(*example())
+        plan["packets"] = plan["packets"][2:]  # Whole 128-value FL stream removed.
+        plan["summary"]["digest"] = transfer_plan_digest(plan)
+        with patch("audioseyx.transfer.socket.create_connection") as connect:
+            with self.assertRaisesRegex(ValueError, "every channel"):
+                apply_plan(plan)
+            connect.assert_not_called()
+
+    def test_missing_duplicate_or_extra_design_channels_are_not_silently_ignored(self):
+        for kind in ['missing','duplicate','extra']:
+            project,design,template,receiver=example()
+            if kind=='missing':design['channels'].pop()
+            elif kind=='duplicate':design['channels'].append(copy.deepcopy(design['channels'][0]))
+            else:
+                extra=copy.deepcopy(design['channels'][0]);extra['channel']='FR';design['channels'].append(extra)
+            with self.subTest(kind=kind),self.assertRaisesRegex(ValueError,'exactly one'):
+                prepare_transfer(project,design,template,receiver)
+
+    def test_execution_uses_a_private_reviewed_snapshot(self):
+        plan=prepare_transfer(*example())
+        class MutatingCaller(FakeReceiver):
+            def sendall(self,packet):
+                if not self.commands:
+                    plan['packets'][0]=b'caller changed the pending packet'
+                    plan['settings']['AudyDynEq']=True
+                super().sendall(packet)
+        receiver=MutatingCaller()
+        with patch('audioseyx.transfer.socket.create_connection',return_value=receiver):
+            apply_plan(plan)
+        self.assertEqual(receiver.commands[-1][0],'EXIT_AUDMD')
+        self.assertEqual(sum(c=='SET_COEFDT' for c,_ in receiver.commands),len(plan['packets']))
+
     def test_incomplete_listening_area_is_not_prepared_as_final_row_calibration(self):
         project,design,template,receiver=example()
         design['settings']['listening_area_resolution']={'required_seats_measured':False,'missing_training_seats':['left','right']}

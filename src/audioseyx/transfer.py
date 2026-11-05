@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import hmac
 import json
 from pathlib import Path
 import socket
@@ -18,6 +19,54 @@ from .receiver import private_host
 from .importers import value
 from .model import ALIASES
 from .compat import load_channel_addresses
+from .coefficient_transport import quantization_report, audit_coefficient_streams, packet_digest
+from .native_protocol import acknowledgement
+
+PLAN_SCHEMA = "audioseyx-native-transfer-2"
+
+
+def _control_packets(plan):
+    def payload(value):
+        return json.dumps(value, separators=(",", ":"), allow_nan=False).encode()
+    before = [frame("ENTER_AUDY"), frame("SET_SETDAT", payload(plan["settings"]))]
+    if plan["levels"] is not None:
+        before.append(frame("SET_SETDAT", payload(plan["levels"])))
+    if plan["fixed"]:
+        before.append(frame("INIT_COEFS"))
+    completion = [frame("FINZ_COEFS"), frame("SET_SETDAT", b'{"AudyFinFlg":"Fin"}')]
+    return before, completion, frame("EXIT_AUDMD")
+
+
+def transfer_plan_digest(plan):
+    """Commit to the reviewed settings, target device and exact outgoing bytes."""
+    before, completion, exit_packet = _control_packets(plan)
+    document = {"schema": plan["schema"],
+                "summary": {k: v for k, v in plan["summary"].items() if k != "digest"},
+                "calibration": plan["calibration"], "settings": plan["settings"],
+                "levels": plan["levels"], "fixed": plan["fixed"],
+                "native_manifest": plan["native_manifest"],
+                "coefficient_packet_sha256": packet_digest(plan["packets"]),
+                "control_packet_sha256": packet_digest(before + completion + [exit_packet])}
+    return hashlib.sha256(json.dumps(document, sort_keys=True, separators=(",", ":"),
+                                     allow_nan=False).encode()).hexdigest()
+
+
+def audit_transfer_plan(plan):
+    """Validate a complete prepared transaction before opening any socket."""
+    try:
+        if not isinstance(plan, dict) or plan.get("schema") != PLAN_SCHEMA:
+            raise ValueError("Prepare a current native transfer plan before execution")
+        digest = plan["summary"]["digest"]
+        if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+            raise ValueError("Invalid reviewed native transfer digest")
+        if not hmac.compare_digest(digest, transfer_plan_digest(plan)):
+            raise ValueError("The reviewed native transfer plan changed; prepare and review it again")
+        audit = audit_coefficient_streams(plan["packets"], plan["native_manifest"], fixed=plan["fixed"])
+        if audit != plan["summary"]["coefficient_transport_audit"]:
+            raise ValueError("Native transfer audit differs from the reviewed summary")
+        return audit
+    except (KeyError, TypeError, OverflowError) as error:
+        raise ValueError("The native transfer plan is incomplete or malformed") from error
 
 
 def canonical_model(model):
@@ -110,6 +159,8 @@ def prepare_transfer(project, design, template, receiver):
     raw_mapping = {ALIASES.get(str(key), str(key)): str(key) for row in status.get("ChSetup", []) for key, setting in row.items() if setting != "N"}
     active = set(raw_mapping)
     configured = {ALIASES.get(channel["commandId"], channel["commandId"]) for channel in template["channels"]}
+    if len(configured) != len(template["channels"]):
+        raise ValueError('OCA aliases refer to duplicated canonical channels')
     if active != configured:
         raise ValueError('The receiver layout differs from the OCA; check the channel configuration')
     if set(project.channels) != configured:
@@ -124,14 +175,21 @@ def prepare_transfer(project, design, template, receiver):
     for channel in out["channels"]:
         channel["commandId"] = ALIASES.get(channel["commandId"], channel["commandId"])
     designs = {item["channel"]: item for item in design["channels"]}
+    if len(designs) != len(design["channels"]) or set(designs) != configured:
+        raise ValueError('The design must contain exactly one complete filter for every configured channel')
+    # Compile before gain planning, then again only after the actual scaling.
+    # Keep the observed encoder calculation rather than assuming a synthesis
+    # model or changing coefficient rounding through algebraic shortcuts.
+    encoded = {name: compile_channel(item, tier) for name, item in designs.items()}
     packets = []
+    native_manifest = []
     used = set()
     adjustments = []
     global_scale = 1.0
     if settings_only:
         peaks = []
-        for item in design["channels"]:
-            peaks += [float(np.max(np.abs(item["taps"]))), float(np.max(np.abs(compile_channel(item, tier)["coefficients"])))]
+        for name, item in designs.items():
+            peaks += [float(np.max(np.abs(item["taps"]))), float(np.max(np.abs(encoded[name]["coefficients"])))]
         global_scale = min(1.0, 0.5 / max(max(peaks), 1e-15))
     for channel in out["channels"]:
         name = channel["commandId"]
@@ -140,7 +198,7 @@ def prepare_transfer(project, design, template, receiver):
             raise ValueError('Unverified or conflicting channel addresses for this device family: ' + name)
         used.add(address)
         item = copy.copy(designs[name])
-        native = compile_channel(item, tier)["coefficients"]
+        native = encoded[name]["coefficients"]
         peak = max(float(np.max(np.abs(native))), float(np.max(np.abs(item["taps"]))))
         scale = global_scale if settings_only else min(1.0, 0.5 / max(peak, 1e-15))
         compensation = -20 * np.log10(scale)
@@ -150,9 +208,13 @@ def prepare_transfer(project, design, template, receiver):
         if trim is not None:
             channel["trimAdjustmentInDbs"] = round(trim, 1)
         item["taps"] = item["taps"] * scale
-        native = compile_channel(item, tier)["coefficients"]
+        compiled = compile_channel(item, tier)
+        native = compiled["coefficients"]
         channel["filter"] = item["taps"].tolist()
         channel["filterLV"] = channel["filter"].copy()
+        native_manifest.append({"channel": name, "address": address, "tier": tier,
+                                "codec": compiled["codec"],
+                                **quantization_report(native, fixed)})
         adjustments.append({"channel": name, "coefficient_scale": scale, "trim_db": channel.get("trimAdjustmentInDbs")})
         for curve in [0, 1]:
             for rate in [0, 1, 2]:
@@ -163,15 +225,22 @@ def prepare_transfer(project, design, template, receiver):
     if settings_only:
         out["schema"] = "audyssey-workbench-calibration-1"
         out["global_headroom_db"] = float(-20 * np.log10(global_scale))
-    digest = hashlib.sha256(json.dumps(out, sort_keys=True, allow_nan=False).encode()).hexdigest()
-    summary = {"digest": digest, "model": model, "host": receiver["host"], "tier": tier,
+    wire_audit = audit_coefficient_streams(packets, native_manifest, fixed=fixed)
+    summary = {"model": model, "host": receiver["host"], "tier": tier,
                "channel_count": len(out["channels"]), "coefficient_packets": len(packets),
                "adjustments": adjustments, "hardware_verified": False,
                "original_filter_backup_available": not settings_only,
                "global_headroom_db": float(-20 * np.log10(global_scale)) if settings_only else 0,
+               "coefficient_transport_audit": wire_audit,
+               "coefficient_quantization": {
+                   "maximum_absolute_error": max(row["maximum_absolute_error"] for row in native_manifest),
+                   "underflowed_values": sum(row["underflowed_values"] for row in native_manifest),
+                   "scope": "coefficient_values_only; native_DSP_reconstruction_unverified"},
                "notice": 'Experimental transfer replaces both current calibration curves and disables Dynamic EQ and Dynamic Volume. Firmware, crossovers, distances and amplifier assignments are not changed.'}
-    return {"summary": summary, "packets": packets, "calibration": out, "settings": settings,
-            "levels": level, "fixed": fixed}
+    plan = {"schema": PLAN_SCHEMA, "summary": summary, "packets": packets, "calibration": out,
+            "settings": settings, "levels": level, "fixed": fixed, "native_manifest": native_manifest}
+    summary["digest"] = transfer_plan_digest(plan)
+    return plan
 
 
 class CalibrationTransport:
@@ -192,6 +261,8 @@ class CalibrationTransport:
             if not chunk:
                 raise ValueError('The receiver closed the calibration connection')
             self.buffer.extend(chunk)
+            if len(self.buffer) > 512 * 1024:
+                raise ValueError('The calibration acknowledgement buffer exceeded its limit')
             while len(self.buffer) >= 3:
                 length = int.from_bytes(self.buffer[1:3], "big")
                 if not 19 <= length <= 65535:
@@ -203,37 +274,36 @@ class CalibrationTransport:
                 command, payload = parse_frame(response)
                 if command != expected:
                     continue
-                message = payload.decode("utf-8", errors="replace").upper()
-                if "NAK" in message or "NACK" in message or "ERROR" in message:
+                if not acknowledgement(payload):
                     raise ValueError('The receiver rejected ' + expected)
-                if "ACK" in message:
-                    return
+                return
         raise ValueError('Timed out waiting for receiver acknowledgement: ' + expected)
 
 
 def apply_plan(plan, progress=None):
+    # Keep the already reviewed transaction independent of caller/UI changes
+    # while waiting for the receiver's acknowledgements.
+    plan = copy.deepcopy(plan)
+    audit_transfer_plan(plan)
+    before, completion, exit_packet = _control_packets(plan)
     host = private_host(plan["summary"]["host"])
     with socket.create_connection((host, 1256), timeout=5) as connection:
         transport = CalibrationTransport(connection)
         entered = False
         try:
             entered = True
-            transport.send_ack(frame("ENTER_AUDY"))
-            transport.send_ack(frame("SET_SETDAT", json.dumps(plan["settings"], separators=(",", ":")).encode()))
-            if plan["levels"] is not None:
-                transport.send_ack(frame("SET_SETDAT", json.dumps(plan["levels"], separators=(",", ":")).encode()))
-            if plan["fixed"]:
-                transport.send_ack(frame("INIT_COEFS"), timeout=20)
+            for packet in before:
+                transport.send_ack(packet, timeout=20 if packet[5:15] == b"INIT_COEFS" else 10)
             for index, packet in enumerate(plan["packets"]):
                 transport.send_ack(packet)
                 if progress and index % 10 == 0:
                     progress(round((index + 1) / len(plan["packets"]) * 90), 'Transferring and waiting for receiver acknowledgement')
-            transport.send_ack(frame("FINZ_COEFS"), timeout=120 if plan["fixed"] else 30)
-            transport.send_ack(frame("SET_SETDAT", b'{"AudyFinFlg":"Fin"}'))
+            for packet in completion:
+                transport.send_ack(packet, timeout=(120 if plan["fixed"] else 30) if packet[5:15] == b"FINZ_COEFS" else 10)
         finally:
             if entered:
                 pending = sys.exc_info()[1]
                 try:
-                    transport.send_ack(frame("EXIT_AUDMD"), timeout=10)
+                    transport.send_ack(exit_packet, timeout=10)
                 except (OSError, ValueError) as error:
                     raise ValueError((str(pending) + "；" if pending else "") + 'Receiver calibration exit was not acknowledged: ' + str(error)) from error

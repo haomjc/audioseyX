@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.0a4 — native calibration transport refactoring
+
+- Separate observed receiver framing, native coefficient serialization and calibration planning while preserving existing protocol imports and wire conventions.
+- Reconstruct and audit every output/curve/rate stream, including vector budgets, routing, sequence, checksums, Float32/Q31 quantization and complete coverage.
+- Commit the reviewed plan to the target device, calibration, settings, levels, exact control frames and coefficient frames; recheck before any socket is opened.
+- Require explicit ACK fields, reject ignored/duplicated design channels, and expose data coverage and coefficient precision in a separate transfer UI module.
+- Retain a private transaction snapshot during execution and record Float32 precision in offline native-candidate exports.
+- Extend packaged offline self-tests across all three tiers, both numeric formats and all observed rate slots without private compatibility assets.
+- Document OCA component parity and the remaining settings-calibration/native-playback gaps. Retain Intel/Python 3.11 and ARM/Python 3.13 macOS test coverage using separate supported runner pools.
+
 ## 0.5.0a3 — conditional reachability analysis
 
 - Analyze the unchanged joint target using annular main/subwoofer sum inequalities and shared-output residual duals across every training position and repeat.

@@ -60,6 +60,8 @@ class HttpWorkflowTests(unittest.TestCase):
         self.assertIn("transfer", state)
         with self.request("/joint.js") as response:
             self.assertIn(b"renderJointEvaluation",response.read())
+        with self.request("/transfer.js") as response:
+            self.assertIn(b"initTransferControls",response.read())
         with self.request("/layouts.js") as response:
             self.assertIn(b"renderReceiverLayout",response.read())
 

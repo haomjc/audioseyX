@@ -48,6 +48,9 @@ The pure-delay example has a peak time of 4 ms after accounting for the original
 | `polarity` | `analyze_polarity(project, same_model_groups)` | Reusable same-model relative polarity diagnostics |
 | `realization` | `load_realization(path, tier, model)` | Validate explicitly supplied native synthesis data |
 | `compat` | `compatibility_status()` | Local optional-resource availability |
+| `coefficient_transport` | `audit_coefficient_streams(packets, manifest, fixed=False)` | Reconstruct every reviewed native channel/curve/rate stream offline |
+| `coefficient_transport` | `quantization_report(coefficients, fixed=False)` | Serialized coefficient precision, counts and value hash |
+| `transfer` | `audit_transfer_plan(plan)` | Recheck the complete reviewed transaction before any connection |
 
 ## Local web API
 
