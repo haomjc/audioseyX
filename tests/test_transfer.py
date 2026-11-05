@@ -9,6 +9,7 @@ from audioseyx.dsp import design_project
 from audioseyx.native import frame, parse_frame
 from audioseyx.transfer import (validate_template, prepare_transfer, apply_plan, template_from_receiver,
                                canonical_model, audit_transfer_plan, transfer_plan_digest)
+from audioseyx.receiver_constraints import receiver_profile,snapshot_fingerprint
 
 
 def example():
@@ -55,6 +56,39 @@ class FakeReceiver:
 
 
 class TransferTests(unittest.TestCase):
+    def test_modeled_distances_levels_crossovers_and_polarity_reach_the_reviewed_bytes(self):
+        project,design,template,receiver=example()
+        receiver['status']['ChSetup'][-1]={'SWMIX1':'E'}
+        snapshot={'available':True,'configured_channels':['FL','SW1'],'speaker_types':{'FL':'small'},'large_channels':[],
+                  'distances_m':{'FL':2.5,'SW1':2.5},'levels_db':{'FL':-6.,'SW1':-6.},
+                  'crossovers':{'FL':80.},'bass_mode':'lfe','lfe_lowpass_hz':120.}
+        receiver['web_settings']=snapshot
+        design['settings']['apply_receiver_adjustments']=True
+        design['receiver_calibration']={'schema':'audioseyx-receiver-calibration-1','model':'AVR-TEST',
+            'profile':receiver_profile('AVR-X3700H'),'baseline_snapshot_sha256':snapshot_fingerprint(snapshot),
+            'proposal':{'distances_m':{'FL':2.5,'SW1':3.18},'levels_db':{'FL':-5.5,'SW1':-6.},
+                        'crossovers_hz':{'FL':100.},'inverted_outputs':['SW1']}}
+        plan=prepare_transfer(project,design,template,receiver)
+        self.assertTrue(plan['summary']['receiver_settings_included'])
+        self.assertEqual(plan['receiver_updates'][0],{'Distance':[{'FL':250},{'SW1':318}]})
+        self.assertEqual(plan['receiver_updates'][1],{'Crossover':[{'FL':100.},{'SW1':'F'}]})
+        self.assertIn('SW1',plan['levels']['ChLevel'][1])
+        self.assertLess(plan['calibration']['channels'][1]['filter'][0],0)
+        self.assertTrue(audit_transfer_plan(plan)['all_streams_complete'])
+        device=FakeReceiver()
+        with patch('audioseyx.transfer.socket.create_connection',return_value=device):apply_plan(plan)
+        payloads=[payload.decode() for command,payload in device.commands if command=='SET_SETDAT']
+        self.assertTrue(any('"Distance"' in payload and '318' in payload for payload in payloads))
+        changed=copy.deepcopy(receiver);changed['web_settings']['levels_db']['FL']=-5.5
+        with self.assertRaisesRegex(ValueError,'changed since'):
+            prepare_transfer(project,design,template,changed)
+
+    def test_status_subwoofer_alias_is_not_sent_as_a_control_identifier(self):
+        project,design,template,receiver=example()
+        receiver['status']['ChSetup'][-1]={'SWMIX1':'E'}
+        plan=prepare_transfer(project,design,template,receiver)
+        self.assertEqual(set(plan['levels']['ChLevel'][-1]),{'SW1'})
+
     def test_reviewed_digest_commits_to_device_settings_and_exact_wire_bytes(self):
         plan = prepare_transfer(*example())
         self.assertTrue(audit_transfer_plan(plan)["all_streams_complete"])

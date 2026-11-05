@@ -1,4 +1,4 @@
-let transferDigest='',transferWireChecked=false;
+let transferDigest='',transferWireChecked=false,transferReceiverSelectionMatches=true;
 
 function initTransferControls(){
  $('template-file').onclick=()=>$('template-input').click();
@@ -9,12 +9,20 @@ function initTransferControls(){
  });
  $('prepare-transfer').onclick=()=>action(async()=>{
   toast('Refreshing device information and checking the plan...');
-  await api('/api/transfer/prepare',{uncorrected_confirmed:$('uncorrected-confirmed').checked});await refresh();
+  await api('/api/transfer/prepare',{uncorrected_confirmed:$('uncorrected-confirmed').checked,
+   apply_receiver_adjustments:$('include-receiver-adjustments').checked});await refresh();
  });
  $('transfer-reviewed').onchange=()=>{
-  $('apply-transfer').disabled=!transferDigest||!transferWireChecked||!$('transfer-reviewed').checked;
+  $('apply-transfer').disabled=!transferDigest||!transferWireChecked||!transferReceiverSelectionMatches||!$('transfer-reviewed').checked;
+ };
+ $('include-receiver-adjustments').onchange=()=>{
+  const plan=state?.transfer?.plan;
+  transferReceiverSelectionMatches=!plan||plan.receiver_settings_included===$('include-receiver-adjustments').checked;
+  $('transfer-reviewed').checked=false;$('apply-transfer').disabled=true;
+  if(plan)toast('Prepare the transfer review again after changing receiver adjustments');
  };
  $('apply-transfer').onclick=()=>action(async()=>{
+  if(!transferReceiverSelectionMatches)throw new Error('Prepare and review the selected receiver adjustments again.');
   await api('/api/transfer/apply',{digest:transferDigest,reviewed:$('transfer-reviewed').checked});
   await refresh();page('results');
  });
@@ -24,6 +32,8 @@ function renderTransfer(result){
  if(!result)return;
  $('template-info').textContent=result.template?`${result.template.model} · ${result.template.channels} channels / ${result.template.original_filter_backup_available?'Original OCA saved':'Settings snapshot only; no original filters'}`:'No complete OCA has been imported.';
  const plan=result.plan;
+ transferReceiverSelectionMatches=!plan||plan.receiver_settings_included===$('include-receiver-adjustments').checked;
+ $('apply-transfer').disabled=!transferDigest||!transferWireChecked||!transferReceiverSelectionMatches||!$('transfer-reviewed').checked;
  if((plan?.digest||'')===transferDigest)return;
  transferDigest=plan?.digest||'';
  transferWireChecked=plan?.coefficient_transport_audit?.all_streams_complete===true;
@@ -35,5 +45,7 @@ function renderTransfer(result){
  const rates=audit?Object.values(audit.sample_rate_slots_hz).map(hz=>(hz/1000)+' kHz').join(' / '):'';
  const dataCheck=audit?`<div class="summary-line"><span>Native data coverage</span><strong>${audit.channels} outputs / ${audit.streams} complete streams</strong></div><p class="hint">Both calibration curves and ${rates} slots were reconstructed and checked before transfer. These byte checks do not verify native filter reconstruction or acoustic performance.</p>`:'<p class="hint">A current native data audit is required before transfer.</p>';
  const precision=quantization?`<details><summary>Coefficient precision</summary><p>Largest absolute coefficient rounding error: ${quantization.maximum_absolute_error.toExponential(3)}. Values rounded to zero: ${quantization.underflowed_values}. This describes coefficient values, not acoustic error.</p></details>`:'';
- $('transfer-plan').innerHTML=`<div class="summary-line"><span>Target receiver</span><strong>${esc(plan.model)}</strong></div><div class="summary-line"><span>Channels / tier</span><strong>${plan.channel_count} / ${esc(plan.tier)}</strong></div>${dataCheck}<p class="hint">${esc(plan.notice)}${plan.original_filter_backup_available?'':' This mode has no original-filter backup. A common '+plan.global_headroom_db.toFixed(1)+' dB digital headroom is reserved; current channel trims are retained.'}</p><div class="table-scroll"><table><thead><tr><th>Channel</th><th>Final trim setting</th></tr></thead><tbody>${plan.adjustments.map(row=>`<tr><td>${esc(row.channel)}</td><td>${row.trim_db===null?'Keep current':row.trim_db.toFixed(1)+' dB'}</td></tr>`).join('')}</tbody></table></div>${precision}`;
+ const proposal=plan.receiver_settings_proposal;
+ const receiverDetails=proposal?`<p>Reviewed native controls: ${Object.keys(proposal.distances_m).map(c=>esc(c)+' '+proposal.distances_m[c].toFixed(2)+' m'+(proposal.crossovers_hz[c]===undefined?'':' / '+proposal.crossovers_hz[c]+' Hz')+(proposal.inverted_outputs.includes(c)?' / invert filter sign':'')).join(' · ')}.</p><p class="hint">Measurement context: ${esc(plan.receiver_model_assumptions?.measurement_context||'unverified')}; native gain/delay order and distance conversion remain experimental assumptions.</p>`:'';
+ $('transfer-plan').innerHTML=`<div class="summary-line"><span>Target receiver</span><strong>${esc(plan.model)}</strong></div><div class="summary-line"><span>Channels / tier</span><strong>${plan.channel_count} / ${esc(plan.tier)}</strong></div>${dataCheck}${receiverDetails}<p class="hint">${esc(plan.notice)}${plan.original_filter_backup_available?'':' This mode has no original-filter backup. A common '+plan.global_headroom_db.toFixed(1)+' dB digital headroom is reserved; '+(plan.receiver_settings_included?'reviewed speaker levels are included.':'current channel trims are retained.')+''}</p><div class="table-scroll"><table><thead><tr><th>Channel</th><th>Final trim setting</th></tr></thead><tbody>${plan.adjustments.map(row=>`<tr><td>${esc(row.channel)}</td><td>${row.trim_db===null?'Keep current':row.trim_db.toFixed(1)+' dB'}</td></tr>`).join('')}</tbody></table></div>${precision}`;
 }

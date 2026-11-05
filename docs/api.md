@@ -51,6 +51,10 @@ The pure-delay example has a peak time of 4 ms after accounting for the original
 | `coefficient_transport` | `audit_coefficient_streams(packets, manifest, fixed=False)` | Reconstruct every reviewed native channel/curve/rate stream offline |
 | `coefficient_transport` | `quantization_report(coefficients, fixed=False)` | Serialized coefficient precision, counts and value hash |
 | `transfer` | `audit_transfer_plan(plan)` | Recheck the complete reviewed transaction before any connection |
+| `receiver_calibration` | `calibrate_receiver(project, design, settings)` | Modeled native distance/level/crossover/polarity proposal |
+| `auditory_balance` | `balance_groups(grid, groups, levels, positions)` | ERB-band robust native-grid relative level matching |
+| `clock_sync` | `estimate_clock(recording, pilot, rate, times)` | Known-pilot affine drift from original recordings |
+| `clock_sync` | `correct_recording(recording, analysis)` | Separate continuous-position raw recording correction |
 
 ## Local web API
 
@@ -64,6 +68,7 @@ audioseyx --version
 audioseyx --self-test [--report FILE]
 audioseyx --joint-benchmark [--benchmark-iterations 60] [--report FILE]
 audioseyx --listening-area-benchmark [--benchmark-iterations 60] [--report FILE]
+audioseyx --native-workflow-benchmark [--report FILE]
 audioseyx --compat-status [--compat-dir DIRECTORY]
 ```
 

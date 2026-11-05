@@ -106,6 +106,10 @@ def build_server(bench_factory, home, port=0, open_browser=True):
             target, name, mime = bench.analysis_path, "measurement-analysis.json", "application/json"
         elif path == "/download-polarity":
             target,name,mime=bench.polarity_path,"polarity-report.json","application/json"
+        elif path == '/download-clock':
+            target,name,mime=bench.clock_archive,'clock-corrected-recording.zip','application/zip'
+        elif path == '/download-clock-reference':
+            target,name,mime=bench.clock_reference_path,'known-clock-reference.zip','application/zip'
         elif path == "/download-calibration":
             target = bench.home / "prepared-calibration.oca" if bench.transfer_plan else None
             name = "prepared-calibration.awbcal.json" if bench.template and bench.template.get("_source_kind") == "native_settings_snapshot" else "prepared-calibration.oca"
@@ -152,14 +156,14 @@ def build_server(bench_factory, home, port=0, open_browser=True):
                 return reply(bench.rew.measurement_controls())
             if path == "/api/download-info":
                 return reply(download_info(request.args.get("path", ""))[1])
-            if path in ["/download", "/download-project", "/download-analysis", "/download-calibration", "/download-polarity"]:
+            if path in ["/download", "/download-project", "/download-analysis", "/download-calibration", "/download-polarity", '/download-clock', '/download-clock-reference']:
                 target, info = download_info(path)
                 expected = request.headers.get("If-Match")
                 if expected and expected != '"' + info["sha256"] + '"':
                     return reply({"error": 'The download changed; restart the download'}, 412)
                 return send_file(target, mimetype=info["mime"], as_attachment=True, download_name=info["filename"],
                                  conditional=True, etag=info["sha256"])
-            asset = {"/": "index.html", "/app.js": "app.js", "/analysis.js": "analysis.js", "/downloads.js": "downloads.js", "/joint.js": "joint.js", "/layouts.js":"layouts.js", "/polarity.js":"polarity.js", "/transfer.js":"transfer.js", "/style.css": "style.css"}.get(path)
+            asset = {"/": "index.html", "/app.js": "app.js", "/analysis.js": "analysis.js", "/downloads.js": "downloads.js", "/joint.js": "joint.js", "/layouts.js":"layouts.js", "/polarity.js":"polarity.js", "/transfer.js":"transfer.js", '/receiver-calibration.js':'receiver-calibration.js', '/clock.js':'clock.js', "/style.css": "style.css"}.get(path)
             if asset is None:
                 return reply({"error": 'Page not found'}, 404)
             content = (assets / asset).read_bytes()
@@ -213,6 +217,13 @@ def build_server(bench_factory, home, port=0, open_browser=True):
             result = bench.start_design(body)
         elif path == "/api/design/cancel":
             result = bench.cancel_design()
+        elif path == '/api/clock/reference':
+            result = bench.create_clock_reference(body)
+        elif path == '/api/clock/correct':
+            result = bench.start_clock_correction(body)
+        elif path == '/api/clock/cancel':
+            if bench.job.get('kind') != 'clock' or bench.job['status'] != 'running': raise ValueError('No raw clock correction is active')
+            bench.clock_cancel.set(); result = {'cancel_requested': True}
         elif path == "/api/design/receiver-settings":
             from .receiver_web import joint_design_defaults
             from .layouts import configured_channels
@@ -262,6 +273,7 @@ def build_server(bench_factory, home, port=0, open_browser=True):
         elif path == "/api/shutdown":
             if bench.job["status"] == "running" and bench.job.get("kind") in ["native_measure", "transfer"]:
                 raise ValueError('Stop stock-microphone capture or wait for receiver transfer completion before exiting')
+            if bench.job.get('kind') == 'clock': bench.clock_cancel.set()
             threading.Thread(target=server.shutdown, daemon=True).start()
             result = {"stopping": True}
         else:

@@ -13,7 +13,7 @@ if __name__ == "__main__":
     except Exception:
         import traceback
         traceback.print_exc()
-        if getattr(sys, "frozen", False) and not any(flag in sys.argv for flag in ["--self-test", "--no-browser"]):
+        if getattr(sys, "frozen", False) and not any(flag in sys.argv for flag in ["--self-test", "--no-browser", "--joint-benchmark", "--listening-area-benchmark", "--native-workflow-benchmark", "--compat-status"]):
             import ctypes
             ctypes.windll.user32.MessageBoxW(None, "Could not start audioseyX. See UserData/audioseyx.log.", "audioseyX", 16)
         raise SystemExit(1)

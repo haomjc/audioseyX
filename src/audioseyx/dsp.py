@@ -246,8 +246,10 @@ def design_project(project, tier, settings, progress=None, *, cancel=None):
     if unknown:
         raise ValueError('Check channel mappings in the measurement list first: ' + ", ".join(unknown))
     optimizer = settings.get("optimizer", "independent")
-    if optimizer not in ["independent", "native_joint"]:
+    if optimizer not in ["independent", "native_joint", "native_calibration"]:
         raise ValueError("Unknown filter-design optimizer")
+    if optimizer == 'native_calibration' and settings.get('phase_mode', 'minimum') != 'minimum':
+        raise ValueError('Native-menu calibration uses a minimum-phase EQ base; arbitrary mixed-phase references remain separate')
     if optimizer == "native_joint":
         from .native_joint import design_native_joint
         return design_native_joint(project, tier, settings, progress, cancel=cancel)
@@ -268,6 +270,16 @@ def design_project(project, tier, settings, progress=None, *, cancel=None):
     if validation:
         result['independent_validation']={'positions':validation,'used_for_design':False,
             'channels':[evaluate_channel_filter([m for m in project.measurements if m.channel==item['channel'] and m.position in validation],item,settings) for item in output]}
+    if optimizer == 'native_calibration':
+        from .receiver_calibration import calibrate_receiver
+        result['receiver_calibration'] = calibrate_receiver(project, result, settings, progress=progress, cancel=cancel)
+        charts=result['receiver_calibration'].pop('routed_charts',[])
+        if charts:result['routed_charts']=charts
+        else:
+            for item in result['channels']:
+                item['limitations'].append('This output plot shows the EQ FIR stage only; the separate receiver proposal lists any additional native level/distance changes.')
+        if result.get('independent_validation'):
+            result['independent_validation']['stage']='EQ_FIR_before_receiver_controls; native-menu validation is reported separately'
     return result
 
 

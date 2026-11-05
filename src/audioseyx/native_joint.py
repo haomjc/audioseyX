@@ -17,19 +17,8 @@ from .measurement_quality import frequency_dependent_response, repeat_diagnostic
 from .model import Project
 from .realization import load_realization
 from .reachability import analyze_reachability
-
-X3700H_CROSSOVERS = (40, 60, 80, 90, 100, 110, 120, 150, 180, 200, 250)
-
-
-def crossover_responses(frequencies, crossover, model, rate=48000):
-    if model not in ["lr4", "bw2_lr4"]:
-        raise ValueError("Select an explicit crossover model: lr4 or bw2_lr4")
-    if not np.isfinite(crossover) or not 20 <= crossover <= 1000 or crossover >= rate * .4:
-        raise ValueError("Invalid crossover frequency")
-    high = signal.sosfreqz(signal.butter(2, crossover, "highpass", fs=rate, output="sos"), worN=frequencies, fs=rate)[1]
-    low = signal.sosfreqz(signal.butter(2, crossover, "lowpass", fs=rate, output="sos"), worN=frequencies, fs=rate)[1] ** 2
-    return high ** 2 if model == "lr4" else high, low
-
+from .routing import crossover_responses, X3700H_CROSSOVERS
+from .spectral_grid import record_response as measured_grid_response
 
 def _position_weights(positions, supplied):
     supplied = supplied or {}
@@ -40,22 +29,6 @@ def _position_weights(positions, supplied):
         raise ValueError("Position weights must be finite, positive and at most 100")
     total = sum(result.values())
     return {p: value / total for p, value in result.items()}
-
-
-def measured_grid_response(measurement,frequencies,nfft,rate):
-    """Full-record DTFT on the solver grid, without phase interpolation."""
-    if measurement.ir is None:return spectrum(measurement,frequencies)
-    if measurement.sample_rate==rate:
-        if len(measurement.ir)>nfft:raise ValueError("The full measured IR does not fit the solver FFT")
-        response=rfft(measurement.ir,nfft)
-    else:
-        response=np.zeros(len(frequencies),dtype=complex)
-        count=int(np.count_nonzero(frequencies<=measurement.sample_rate/2))
-        if count>1:
-            response[:count]=signal.zoom_fft(measurement.ir,[frequencies[0],frequencies[count-1]],m=count,
-                                             fs=measurement.sample_rate,endpoint=True)
-        elif count:response[0]=np.sum(measurement.ir)
-    return response*np.exp(-2j*np.pi*frequencies*measurement.start_time_s)
 
 
 def prepare_native_problem(project, tier, settings, *, references=None, progress=None, realization_profile=None, cancel=None):

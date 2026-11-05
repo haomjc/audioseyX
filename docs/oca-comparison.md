@@ -1,6 +1,6 @@
 # OCA replacement status
 
-**audioseyX 0.5.0a4 is not yet a verified replacement for the complete OCA workflow.** Several measurement, analysis and optimization components are implemented; a complete native calibration and normal-playback acoustic result have not been established.
+**audioseyX 0.5.0a5 is not yet a verified replacement for the complete OCA workflow.** Several measurement, analysis and optimization components are implemented; a complete native calibration and normal-playback acoustic result have not been established.
 
 This assessment distinguishes the user's A1 Evo AcoustiX 2026-06-09 package from GSonic Reference. It describes inspected behavior and audioseyX's evidence, rather than an independently measured product comparison.
 
@@ -12,7 +12,7 @@ This assessment distinguishes the user's A1 Evo AcoustiX 2026-06-09 package from
 | Both calibration curves and all observed rate slots | Offline audited | Reconstructs every channel/curve/rate stream; verifies sequence, size, checksum, routing, count and serialized values before connecting |
 | Independent calibration-curve designs | Incomplete | Current preparation writes the same designed filter into both curve identifiers; independent curve targets are not yet exposed |
 | Review and transfer transaction | Implemented; simulated validation | The review digest commits to the receiver, calibration, levels, settings, control frames and coefficient frames; real transfer is unverified |
-| Speaker distance, level and crossover calibration | Incomplete native integration | Existing settings are retained, coefficient gain compensation is planned, and crossover/alignment models exist; there is no complete joint settings-calibration replacement |
+| Speaker distance, level and crossover calibration | Modeled native integration implemented; physical validation pending | Minimum-phase EQ, exact declared-grid shared-bass timing/linked crossover search and auditory-band trim proposals can enter the reviewed native transaction; main differences are preserved unless explicitly rescaled |
 | Multiple positions and seat priorities | Implemented; synthetic spatial validation | Actual three-seat correction still requires left/right measurements; repeats at the centre do not fill those seats |
 | Full complex joint FIR and FDW goals | Implemented as reference/export workflow | Expanded taps are distinct from writable native vectors; native synthesis and phase reconstruction require verification |
 | Original-filter recovery | Imported full OCA copy retained | A device-settings snapshot has no original filters; automatic recovery from AVR-resident coefficients is not implemented |
@@ -35,6 +35,6 @@ Offline native-candidate exports also record Float32 coefficient precision and a
 
 ## Comparison with GSonic
 
-GSonic Reference's [official README](https://github.com/ObsessiveCompulsiveAudiophile/GSonic/blob/master/README.md) describes stereo measurement, spatial averaging, drift compensation and WAV filters loaded into a convolution engine. Its feature list is a research reference. It is not evidence that those capabilities run through an Audyssey AVR's native coefficient interface. audioseyX has not implemented automatic clock-drift recovery from already-deconvolved IRs or established GSonic-equivalent perceptual balancing.
+GSonic Reference's [official README](https://github.com/ObsessiveCompulsiveAudiophile/GSonic/blob/master/README.md) describes stereo measurement, spatial averaging, drift compensation and WAV filters loaded into a convolution engine. Its feature list is a research reference. It is not evidence that those capabilities run through an Audyssey AVR's native coefficient interface. audioseyX now offers independent ERB-band response matching and known-pilot clock correction for original recordings. Already-deconvolved IRs still cannot establish clock drift, and GSonic-equivalent perceptual balancing has not been demonstrated. See [integrated workflows](integrated-calibration.md).
 
-The practical priority is a validated minimum-phase native calibration workflow, then complete receiver-settings integration and physical playback verification. Adding more reference optimizers does not itself complete that path.
+The current integrated minimum-phase/native-menu workflow still needs physical gain/delay-path and normal-playback validation before it can be called a verified OCA replacement. Adding more reference optimizers does not itself complete that path.

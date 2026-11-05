@@ -30,7 +30,7 @@ Read-only native information, exact-IP HEOS model identification and current spe
 
 Transfer uses the observed calibration coefficient interface, not firmware flashing. A plan checks the reported model, tier, numeric format, full channel coverage, microphone state and gain budget. Synthetic measurements are rejected; limited mixed-phase designs are export-only.
 
-A complete imported OCA retains an original-filter recovery copy. A settings-only snapshot has no old filters and may require rerunning stock calibration for recovery. The experimental transfer replaces both calibration curves and disables Dynamic EQ and Dynamic Volume while preserving existing crossover, distance and amplifier-assignment settings.
+A complete imported OCA retains an original-filter recovery copy. A settings-only snapshot has no old filters and may require rerunning stock calibration for recovery. The ordinary EQ transfer replaces both calibration curves and disables Dynamic EQ and Dynamic Volume while retaining crossover, distance and amplifier assignment. An explicitly included [native-menu proposal](integrated-calibration.md) can additionally update modeled distances, levels, crossovers and sub-filter polarity through the same reviewed transaction; amplifier assignment and firmware remain unchanged.
 
 No model has completed physical validation. Packet acknowledgements and simulated tests do not establish actual reconstruction, sample-rate behavior or audible results. The project does not implement arbitrary cross-channel convolution or change the receiver DSP topology.
 

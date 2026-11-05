@@ -12,7 +12,7 @@ FORBIDDEN_PARTS = {".git", ".private", ".native-profiles", "UserData", "用户�
 FORBIDDEN_SUFFIXES = {".exe", ".ady", ".oca", ".awb", ".npz", ".npy", ".log", ".pyc"}
 WHEEL_REQUIRED = {"audioseyx/__init__.py", "audioseyx/__main__.py", "audioseyx/synthetic_hashes.json",
                   "audioseyx/web/index.html", "audioseyx/web/app.js", "audioseyx/web/analysis.js",
-                  "audioseyx/web/downloads.js", "audioseyx/web/joint.js", "audioseyx/web/layouts.js", "audioseyx/web/polarity.js", "audioseyx/web/transfer.js", "audioseyx/web/style.css"}
+                  "audioseyx/web/downloads.js", "audioseyx/web/joint.js", "audioseyx/web/layouts.js", "audioseyx/web/polarity.js", "audioseyx/web/transfer.js", "audioseyx/web/receiver-calibration.js", "audioseyx/web/clock.js", "audioseyx/web/style.css"}
 
 
 def check_names(names):

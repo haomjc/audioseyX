@@ -21,14 +21,19 @@ from .model import ALIASES
 from .compat import load_channel_addresses
 from .coefficient_transport import quantization_report, audit_coefficient_streams, packet_digest
 from .native_protocol import acknowledgement
+from .receiver_constraints import validate_receiver_proposal
 
-PLAN_SCHEMA = "audioseyx-native-transfer-2"
+PLAN_SCHEMA = "audioseyx-native-transfer-3"
 
 
 def _control_packets(plan):
     def payload(value):
         return json.dumps(value, separators=(",", ":"), allow_nan=False).encode()
     before = [frame("ENTER_AUDY"), frame("SET_SETDAT", payload(plan["settings"]))]
+    for update in plan.get('receiver_updates', []):
+        if not isinstance(update, dict) or len(update) != 1 or next(iter(update)) not in ['Distance', 'Crossover']:
+            raise ValueError('Unexpected receiver-setting operation in the reviewed native plan')
+        before.append(frame('SET_SETDAT', payload(update)))
     if plan["levels"] is not None:
         before.append(frame("SET_SETDAT", payload(plan["levels"])))
     if plan["fixed"]:
@@ -45,6 +50,7 @@ def transfer_plan_digest(plan):
                 "calibration": plan["calibration"], "settings": plan["settings"],
                 "levels": plan["levels"], "fixed": plan["fixed"],
                 "native_manifest": plan["native_manifest"],
+                "receiver_updates": plan.get('receiver_updates', []),
                 "coefficient_packet_sha256": packet_digest(plan["packets"]),
                 "control_packet_sha256": packet_digest(before + completion + [exit_packet])}
     return hashlib.sha256(json.dumps(document, sort_keys=True, separators=(",", ":"),
@@ -165,6 +171,11 @@ def prepare_transfer(project, design, template, receiver):
         raise ValueError('The receiver layout differs from the OCA; check the channel configuration')
     if set(project.channels) != configured:
         raise ValueError('Measurements do not cover every OCA channel; partial replacement is not performed')
+    receiver_proposal = None
+    if design['settings'].get('apply_receiver_adjustments'):
+        if canonical_model(design.get('receiver_calibration', {}).get('model')) != canonical_model(model):
+            raise ValueError('The modeled receiver and connected receiver differ')
+        receiver_proposal = validate_receiver_proposal(design.get('receiver_calibration'), receiver.get('web_settings', {}), configured)
     dtype = str(value(info, "DType", default="")).lower()
     if not dtype.startswith(("fixed", "float")):
         raise ValueError('The receiver coefficient numeric format could not be confirmed')
@@ -172,8 +183,18 @@ def prepare_transfer(project, design, template, receiver):
     addresses = load_channel_addresses()
     family = "griffin" if template["hasGriffinLiteDSP"] else "eq2" if tier == "XT32" else "neq2"
     out = copy.deepcopy(template)
+    status_types = {ALIASES.get(str(key), str(key)): setting for row in status.get('ChSetup', []) for key, setting in row.items() if setting != 'N'}
     for channel in out["channels"]:
         channel["commandId"] = ALIASES.get(channel["commandId"], channel["commandId"])
+        if settings_only:
+            kind = status_types[channel['commandId']]
+            if kind not in ['S', 'L', 'E']: raise ValueError('Unrecognized native speaker type in the settings snapshot')
+            channel['speakerType'] = kind
+        if receiver_proposal:
+            name = channel['commandId']
+            channel['distanceInMeters'] = receiver_proposal['distances_m'][name]
+            channel['trimAdjustmentInDbs'] = receiver_proposal['levels_db'][name]
+            if name in receiver_proposal['crossovers_hz']: channel['xover'] = receiver_proposal['crossovers_hz'][name]
     designs = {item["channel"]: item for item in design["channels"]}
     if len(designs) != len(design["channels"]) or set(designs) != configured:
         raise ValueError('The design must contain exactly one complete filter for every configured channel')
@@ -190,7 +211,8 @@ def prepare_transfer(project, design, template, receiver):
         peaks = []
         for name, item in designs.items():
             peaks += [float(np.max(np.abs(item["taps"]))), float(np.max(np.abs(encoded[name]["coefficients"])))]
-        global_scale = min(1.0, 0.5 / max(max(peaks), 1e-15))
+        needed = max(0., 20 * np.log10(max(max(peaks), 1e-15) / .5))
+        global_scale = 10 ** (-np.ceil(needed * 10 - 1e-9) / 10 / 20)
     for channel in out["channels"]:
         name = channel["commandId"]
         address = addresses.get(name, {}).get(family)
@@ -198,11 +220,19 @@ def prepare_transfer(project, design, template, receiver):
             raise ValueError('Unverified or conflicting channel addresses for this device family: ' + name)
         used.add(address)
         item = copy.copy(designs[name])
+        if receiver_proposal and name in receiver_proposal['inverted_outputs']:
+            item['taps'] = -item['taps']
+            # No arbitrary mixed-phase transformation: a global sign preserves
+            # minimum-phase zeros and the observed native encoder is linear.
+            if '_native_parameters' in item:
+                item['_native_parameters'] = -item['_native_parameters']
+                item['_native_parameter_taps'] = -item['_native_parameter_taps']
         native = encoded[name]["coefficients"]
         peak = max(float(np.max(np.abs(native))), float(np.max(np.abs(item["taps"]))))
-        scale = global_scale if settings_only else min(1.0, 0.5 / max(peak, 1e-15))
+        needed = max(0., 20 * np.log10(max(peak, 1e-15) / .5))
+        scale = global_scale if settings_only else 10 ** (-np.ceil(needed * 10 - 1e-9) / 10 / 20)
         compensation = -20 * np.log10(scale)
-        trim = None if settings_only else float(channel["trimAdjustmentInDbs"]) + float(compensation)
+        trim = None if settings_only and not receiver_proposal else float(channel["trimAdjustmentInDbs"]) + float(compensation)
         if trim is not None and not -12 <= trim <= 12:
             raise ValueError(f"{name} coefficient gain compensation exceeds the trim budget; reduce target boost and redesign")
         if trim is not None:
@@ -215,13 +245,28 @@ def prepare_transfer(project, design, template, receiver):
         native_manifest.append({"channel": name, "address": address, "tier": tier,
                                 "codec": compiled["codec"],
                                 **quantization_report(native, fixed)})
-        adjustments.append({"channel": name, "coefficient_scale": scale, "trim_db": channel.get("trimAdjustmentInDbs")})
+        adjustments.append({"channel": name, "coefficient_scale": scale, "trim_db": channel.get("trimAdjustmentInDbs"),
+                            'filter_polarity_inverted': bool(receiver_proposal and name in receiver_proposal['inverted_outputs'])})
         for curve in [0, 1]:
             for rate in [0, 1, 2]:
                 packets.extend(coefficient_packets(native, address, curve, rate, fixed))
     settings = {"AudyFinFlg": "NotFin", "AudyDynEq": False, "AudyDynVol": False,
                 "AudyMultEq": True, "AudyEqSet": "Flat"}
-    level = None if settings_only else {"ChLevel": [{raw_mapping[c["commandId"]]: round(c["trimAdjustmentInDbs"] * 10)} for c in out["channels"]]}
+    # SWMIX is a status alias, not the individual SET_SETDAT control identifier.
+    controls = {c['commandId']: c['commandId'] if raw_mapping[c['commandId']].startswith('SWMIX') else raw_mapping[c['commandId']] for c in out['channels']}
+    level = None if settings_only and not receiver_proposal else {"ChLevel": [{controls[c["commandId"]]: round(c["trimAdjustmentInDbs"] * 10)} for c in out["channels"]]}
+    receiver_updates = []
+    if receiver_proposal:
+        current = receiver['web_settings']
+        if any(abs(receiver_proposal['distances_m'][c] - current['distances_m'][c]) > 1e-8 for c in configured):
+            receiver_updates.append({'Distance': [{controls[c]: round(receiver_proposal['distances_m'][c] * 100)} for c in controls]})
+        if receiver_proposal['crossovers_hz']:
+            entries = []
+            for c in controls:
+                crossover_setting = 'F' if c.startswith('SW') else receiver_proposal['crossovers_hz'].get(c, current['crossovers'].get(c, 'F'))
+                if crossover_setting != 'F': crossover_setting = int(round(crossover_setting))
+                entries.append({controls[c]: crossover_setting})
+            receiver_updates.append({'Crossover': entries})
     if settings_only:
         out["schema"] = "audyssey-workbench-calibration-1"
         out["global_headroom_db"] = float(-20 * np.log10(global_scale))
@@ -232,13 +277,18 @@ def prepare_transfer(project, design, template, receiver):
                "original_filter_backup_available": not settings_only,
                "global_headroom_db": float(-20 * np.log10(global_scale)) if settings_only else 0,
                "coefficient_transport_audit": wire_audit,
+               'receiver_settings_included': bool(receiver_proposal),
+               'receiver_settings_proposal': receiver_proposal,
+               'receiver_model_assumptions': design.get('receiver_calibration', {}).get('assumptions') if receiver_proposal else None,
+               'headroom_compensated_by_channel_levels': bool(not settings_only or receiver_proposal),
                "coefficient_quantization": {
                    "maximum_absolute_error": max(row["maximum_absolute_error"] for row in native_manifest),
                    "underflowed_values": sum(row["underflowed_values"] for row in native_manifest),
                    "scope": "coefficient_values_only; native_DSP_reconstruction_unverified"},
-               "notice": 'Experimental transfer replaces both current calibration curves and disables Dynamic EQ and Dynamic Volume. Firmware, crossovers, distances and amplifier assignments are not changed.'}
+               "notice": ('Experimental transfer includes the reviewed modeled speaker levels, distances, crossovers and subwoofer filter polarity. Firmware, bass mode and amplifier assignment are retained.' if receiver_proposal else 'Experimental transfer replaces both current calibration curves and disables Dynamic EQ and Dynamic Volume. Firmware, crossovers, distances and amplifier assignments are not changed.')}
     plan = {"schema": PLAN_SCHEMA, "summary": summary, "packets": packets, "calibration": out,
-            "settings": settings, "levels": level, "fixed": fixed, "native_manifest": native_manifest}
+            "settings": settings, "levels": level, "fixed": fixed, "native_manifest": native_manifest,
+            'receiver_updates': receiver_updates}
     summary["digest"] = transfer_plan_digest(plan)
     return plan
 

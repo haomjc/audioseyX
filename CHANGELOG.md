@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.0a5 — integrated native menus and auditory/clock workflows
+
+- Combine full-budget minimum-phase EQ with explicit native-menu distance, level, crossover and sub-filter-polarity proposals, retaining raw timing and every retained repeat.
+- Evaluate every declared native distance step and linked crossover choice through exact conditional separability, with nested source/seat risk, optional routing-model ensembles and independent holdouts. The exactness claim is conditional on fixed FIRs and the proposed trim state.
+- Add confirmed same-model ERB-band matching with robust Huber costs and exact zero-sum discrete trim optimization; preserve per-position priority across repeated scans.
+- Separate physical sound speed from the X3700H legacy distance/delay model, preserve current main differences by default and expose explicit experimental relative-distance rescaling.
+- Bind reviewed menu changes to the native byte transaction, normalize SWMIX control aliases, and quantize coefficient headroom to the tenth-dB compensation grid.
+- Add known-pilot clock estimation and continuous-position correction of complete original recordings, with file-only reference generation, cancellation, preserved originals and timing maps. Deconvolved IRs are not treated as clock evidence.
+- Add integrated UI, deterministic startup ordering and a full-layout synthetic native-workflow benchmark; document the boundary between independent methods and GSonic's proprietary engine.
+
 ## 0.5.0a4 — native calibration transport refactoring
 
 - Separate observed receiver framing, native coefficient serialization and calibration planning while preserving existing protocol imports and wire conventions.

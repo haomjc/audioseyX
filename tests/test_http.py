@@ -1,3 +1,4 @@
+import base64
 import json
 import re
 import tempfile
@@ -62,6 +63,52 @@ class HttpWorkflowTests(unittest.TestCase):
             self.assertIn(b"renderJointEvaluation",response.read())
         with self.request("/transfer.js") as response:
             self.assertIn(b"initTransferControls",response.read())
+        with self.request('/receiver-calibration.js') as response:
+            self.assertIn(b'nativeCalibrationSettings',response.read())
+        with self.request('/clock.js') as response:
+            self.assertIn(b'initClockControls',response.read())
+
+    def test_clock_reference_creates_files_without_changing_the_project_or_contacting_receiver(self):
+        before=self.bench.project
+        with self.request('/api/clock/reference',{'marker_times_s':[.5,1.5,2.5],'sample_rate':8000},self.bench.token) as r:
+            report=json.load(r)
+        self.assertFalse(report['report']['sound_played'])
+        self.assertIs(self.bench.project,before)
+        with self.request('/download-clock-reference') as r:self.assertTrue(r.read().startswith(b'PK'))
+
+    def test_original_recording_clock_correction_exports_a_separate_raw_file(self):
+        from scipy.io import wavfile
+        from test_clock_sync import original_recording
+        value,pilot,rate,times=original_recording()
+        def encoded(name,array):
+            output=io.BytesIO();wavfile.write(output,rate,array)
+            return {'filename':name,'data':base64.b64encode(output.getvalue()).decode()}
+        original_project=self.bench.project
+        body={'recording':encoded('original.wav',value),'pilot':encoded('pilot.wav',pilot),
+              'marker_times_s':times.tolist(),'latency_guess_s':.035,'search_radius_s':.08}
+        with self.request('/api/clock/correct',body,self.bench.token) as r:r.read()
+        self.wait_design()
+        self.assertEqual(self.bench.job['status'],'complete',self.bench.job)
+        self.assertIs(self.bench.project,original_project)
+        self.assertFalse(self.bench.clock_result['receiver_contacted'])
+        self.assertAlmostEqual(self.bench.clock_result['analysis']['estimated_drift_ppm'],350,delta=1.5)
+        with self.request('/download-clock') as r:
+            import zipfile
+            with zipfile.ZipFile(io.BytesIO(r.read())) as archive:
+                self.assertIn('clock-corrected-recording.wav',archive.namelist())
+                self.assertFalse(json.loads(archive.read('clock-report.json'))['mapping']['deconvolution_performed'])
+
+    def test_native_calibration_design_is_serializable_and_stays_offline(self):
+        from test_receiver_calibration import fixture
+        p,_,_,settings=fixture();self.bench.set_project(p)
+        settings.update(optimizer='native_calibration',receiver_max_delay_ms=.1,high_hz=300,bass_db=0,tilt_db_oct=0)
+        with self.request('/api/design',settings,self.bench.token) as r:r.read()
+        self.wait_design()
+        self.assertEqual(self.bench.job['status'],'complete',self.bench.job)
+        with self.request('/api/state') as r:state=json.load(r)
+        self.assertIsNone(state['receiver'])
+        self.assertIn('proposal',state['design']['receiver_calibration'])
+        self.assertFalse(state['design']['receiver_upload_ready'])
         with self.request("/layouts.js") as response:
             self.assertIn(b"renderReceiverLayout",response.read())
 

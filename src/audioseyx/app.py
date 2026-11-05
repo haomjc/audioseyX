@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import copy
 import json
 import os
 from pathlib import Path
@@ -60,6 +61,10 @@ class Workbench:
         self.transfer_plan = None
         self.capture_cancel = threading.Event()
         self.design_cancel = threading.Event()
+        self.clock_cancel = threading.Event()
+        self.clock_result = None
+        self.clock_archive = None
+        self.clock_reference_path = None
         self.target_curve = None
         self.log('Workbench started. No receiver has been connected or modified.')
         curve_file = self.home / "target-curve.json"
@@ -93,13 +98,15 @@ class Workbench:
     def state(self):
         return {"application_id": "audioseyx-workbench", "version": __version__, "compatibility": compatibility_status(),
                 "features":{"full_complex_joint_fir":True,"native_synthesis_models":True,"per_frequency_fdw":True,
-                            "variable_channel_layouts":True,"read_only_receiver_settings":True},
+                            "variable_channel_layouts":True,"read_only_receiver_settings":True,
+                            'native_receiver_calibration':True,'auditory_band_balance':True,'raw_clock_correction':True},
                 "project": self.project.summary() if self.project else None,
                 "design": public_design(self.design), "joint": self.joint, "job": dict(self.job),
                 "receiver": self.receiver, "events": self.events[-15:],
                 "export_available": self.export_path is not None,
                 "analysis_available": self.analysis_path is not None,
                 "polarity":self.polarity_report,
+                'clock':self.clock_result,
                 "target_curve": {"name": self.target_curve["name"], "points": len(self.target_curve["frequency"])} if self.target_curve else None}
 
     def transfer_state(self):
@@ -162,6 +169,9 @@ class Workbench:
                 raise ValueError('A design job is already running')
             project = self.project
             settings["target_curve"] = self.target_curve
+            if settings.get('optimizer') == 'native_calibration':
+                cached = self.receiver.get('web_settings', {}) if self.receiver and self.receiver.get('connected') else project.metadata.get('receiver_settings_snapshot', {})
+                settings['receiver_snapshot'] = copy.deepcopy(cached)
             self.transfer_plan = None
             self.design = None
             self.joint = None
@@ -180,7 +190,8 @@ class Workbench:
                 progress(90, 'Evaluating shared-subwoofer alignment')
                 joint = ({"available":True,"kind":"full_joint_fir","optimization":design["joint_optimization"],
                           "evaluation":design["joint_evaluation"],"model":design["joint_model"]}
-                         if design.get("joint_model") else joint_sub_alignment(project, design, float(settings.get("crossover_hz", 80))))
+                         if design.get("joint_model") else {'available':False,'reason':'Native receiver calibration has its own complete timing/crossover result; no second alignment is applied.'} if design.get('receiver_calibration')
+                         else joint_sub_alignment(project, design, float(settings.get("crossover_hz", 80))))
                 progress(95, 'Compiling candidate formats and exporting reports')
                 path = export_bundle(project, design, self.home / "exports" / (project.id + "-" + str(time.time_ns())), joint)
                 with self.lock:
@@ -204,6 +215,35 @@ class Workbench:
                 raise ValueError("No filter-design job is running")
             self.design_cancel.set()
         return {"cancel_requested":True}
+
+    def create_clock_reference(self, body):
+        from .recording_workflow import clock_reference
+        path, report = clock_reference(self.home, body.get('marker_times_s', [.5, 2., 3.5]), int(body.get('sample_rate', 48000)))
+        self.clock_reference_path = path
+        return {'report': report, 'download_url': '/download-clock-reference'}
+
+    def start_clock_correction(self, body):
+        with self.lock:
+            if self.job['status'] == 'running': raise ValueError('Wait for the current calculation before correcting a recording')
+            self.clock_cancel = threading.Event()
+            self.clock_result = None; self.clock_archive = None
+            self.job = {'status': 'running', 'kind': 'clock', 'progress': 0, 'message': 'Preparing original WAV clock analysis'}
+        def progress(number, message): self.job.update(progress=number, message=message)
+        def run():
+            try:
+                from .recording_workflow import correct_clock_files
+                path, report = correct_clock_files(self.home, body, self.clock_cancel, progress)
+                with self.lock:
+                    if self.clock_cancel.is_set(): raise InterruptedError('Raw recording correction cancelled')
+                    self.clock_archive = path; self.clock_result = report
+                    self.job = {'status': 'complete', 'kind': 'clock', 'progress': 100, 'message': 'Separate clock-corrected raw recording and timing map ready'}
+                self.log('Original recording retained. Clock correction did not play sound, modify a measurement project or contact a receiver.')
+            except InterruptedError as error:
+                self.job = {'status': 'cancelled', 'kind': 'clock', 'progress': 0, 'message': str(error)}
+            except Exception as error:
+                self.job = {'status': 'failed', 'kind': 'clock', 'progress': 0, 'message': str(error)}
+        threading.Thread(target=run, daemon=True).start()
+        return dict(self.job)
 
     def set_curve(self, body):
         if self.job["status"] == "running":
@@ -306,7 +346,8 @@ class Workbench:
         if self.job["status"] == "running":
             raise ValueError('Wait for the current job to finish')
         self.design["settings"]["uncorrected_measurements_confirmed"] = body.get("uncorrected_confirmed") is True
-        self.receiver = ReceiverClient(self.receiver["host"]).read_info()
+        self.design['settings']['apply_receiver_adjustments'] = body.get('apply_receiver_adjustments') is True
+        self.receiver = ReceiverClient(self.receiver["host"]).read_info(include_settings=self.design['settings']['apply_receiver_adjustments'])
         plan = prepare_transfer(self.project, self.design, self.template, self.receiver)
         (self.home / "prepared-calibration.oca").write_text(json.dumps(plan["calibration"], allow_nan=False), encoding="utf-8")
         (self.home / "receiver-before-transfer.json").write_text(json.dumps(self.receiver, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -338,7 +379,7 @@ class Workbench:
             self.transfer_plan = None
             self.job = {"status": "running", "progress": 0, "message": 'Rechecking receiver status', "kind": "transfer"}
         try:
-            fresh = ReceiverClient(host).read_info()
+            fresh = ReceiverClient(host).read_info(include_settings=bool(self.design['settings'].get('apply_receiver_adjustments')))
             plan = prepare_transfer(self.project, self.design, self.template, fresh)
             if plan["summary"]["digest"] != body["digest"]:
                 raise ValueError('The device or design changed; review the plan again')
@@ -420,6 +461,7 @@ def main():
     checks.add_argument("--self-test", action="store_true")
     checks.add_argument("--joint-benchmark",action="store_true",help="Run the full synthetic XT32 7.1.4 joint-FIR benchmark without connecting to a receiver")
     checks.add_argument('--listening-area-benchmark',action='store_true',help='Validate a synthetic three-seat objective without contacting a receiver')
+    checks.add_argument('--native-workflow-benchmark',action='store_true',help='Validate synthetic full-layout native-menu planning and known raw clock drift without playback')
     parser.add_argument("--benchmark-iterations",type=int,default=60)
     parser.add_argument("--report", default=None)
     args = parser.parse_args()
@@ -428,8 +470,11 @@ def main():
     if args.compat_status:
         print(json.dumps(compatibility_status(), ensure_ascii=False, indent=2), flush=True)
         return
-    if args.self_test or args.joint_benchmark or args.listening_area_benchmark:
-        if args.listening_area_benchmark:
+    if args.self_test or args.joint_benchmark or args.listening_area_benchmark or args.native_workflow_benchmark:
+        if args.native_workflow_benchmark:
+            from .native_workflow_benchmarks import run_native_workflow_benchmark
+            report=run_native_workflow_benchmark(lambda n,m:print(f'{n}% {m}',file=sys.stderr,flush=True))
+        elif args.listening_area_benchmark:
             from .area_benchmarks import run_listening_area_benchmark
             report=run_listening_area_benchmark(args.benchmark_iterations,lambda number,message:print(f'{number}% {message}',file=sys.stderr,flush=True))
         elif args.joint_benchmark:
