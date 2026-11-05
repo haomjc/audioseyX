@@ -56,6 +56,13 @@ class FakeReceiver:
 
 
 class TransferTests(unittest.TestCase):
+    def test_incomplete_spatial_plan_and_changed_plan_are_not_prepared(self):
+        from audioseyx.spatial_plan import preset_plan
+        p,d,t,r=example();p.metadata['spatial_plan']=preset_plan(p,preset='single_area',count=8)
+        with self.assertRaisesRegex(ValueError,'incomplete spatial measurement plan'):prepare_transfer(p,d,t,r)
+        p.metadata['spatial_plan']=preset_plan(p,preset='observed')
+        with self.assertRaisesRegex(ValueError,'does not match the current spatial'):prepare_transfer(p,d,t,r)
+
     def test_modeled_distances_levels_crossovers_and_polarity_reach_the_reviewed_bytes(self):
         project,design,template,receiver=example()
         receiver['status']['ChSetup'][-1]={'SWMIX1':'E'}

@@ -537,7 +537,7 @@ def design_native_joint(project, tier, settings, progress=None, *, cancel=None):
     if validation:
         heldout = Project(project.name, [m for m in project.measurements if m.position in validation],
                           project.origin, project.model, project.tier, dict(project.metadata))
-        validation_settings = {**settings, "position_weights":{}}
+        validation_settings = {**settings, "position_weights":settings.get('validation_position_weights',{})}
         other, _ = prepare_native_problem(heldout, tier, validation_settings, references=model["references_db"], realization_profile=realization)
         # Different recording lengths can produce different FFT grids; taps,
         # native sample rates and lengths remain identical and are not refitted.

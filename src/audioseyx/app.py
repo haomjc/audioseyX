@@ -114,7 +114,8 @@ class Workbench:
                             'native_receiver_calibration':True,'auditory_band_balance':True,'raw_clock_correction':True,
                             'temporal_verification':True,'capability_assessment':True,'independent_native_curves':True,
                             'coupled_native_controls':True,'data_linked_saved_controls':True,
-                            'native_eq_refinement':True,'measurement_robustness':True,'design_history':True},
+                            'native_eq_refinement':True,'measurement_robustness':True,'design_history':True,
+                            'spatial_measurement_plans':True,'resumable_position_capture':True},
                 'capability_assessment': capability_assessment(self.project),
                 "project": self.project.summary() if self.project else None,
                 "design": public_design(self.design), "joint": self.joint, "job": dict(self.job),
@@ -136,8 +137,9 @@ class Workbench:
                              "original_filter_backup_available": self.template.get("_source_kind") != "native_settings_snapshot"} if self.template else None,
                 "plan": self.transfer_plan["summary"] if self.transfer_plan else None}
 
-    def set_project(self, project):
-        if self.job["status"] == "running":
+    def set_project(self, project, *, _capture_run_id=None):
+        capture_commit=_capture_run_id is not None and self.job.get('kind')=='native_measure' and self.job.get('capture_run_id')==_capture_run_id
+        if self.job["status"] == "running" and not capture_commit:
             raise ValueError('Wait for the current design to finish before changing projects')
         # Serve immutable snapshots. Windows holds an open download handle for
         # a while after the client finishes reading, which blocks replacement.
@@ -185,6 +187,45 @@ class Workbench:
             self.project.measurements[index].channel = channel
             self.project.measurements[index].position = position
         return self.set_project(self.project)
+
+    def set_spatial_plan(self,body):
+        from .spatial_plan import checked_plan,listening_area,preset_plan
+        with self.lock:
+            if self.project is None:raise ValueError('Import or capture measurements before planning positions')
+            if self.job.get('status')=='running':raise ValueError('Wait for the active job before changing the measurement plan')
+            plan=checked_plan(body['plan'],self.project) if body.get('plan') is not None else checked_plan(
+                preset_plan(self.project,body.get('preset','three_seat'),body.get('count',8),
+                            float(body.get('centre_priority',.5)),body.get('repeats',1)),self.project)
+            project=Project(self.project.name,list(self.project.measurements),self.project.origin,self.project.model,self.project.tier,
+                            copy.deepcopy(self.project.metadata),list(self.project.warnings),id=self.project.id)
+            project.metadata['spatial_plan']=plan
+            project.metadata['listening_area']=listening_area(plan)
+            return self.set_project(project)
+
+    def preview_native_measurement(self,body,*,existing=None,use_current=True,channels=None):
+        from .spatial_plan import capture_batches,position_id
+        project=self.project if use_current else existing
+        if body.get('new_project') is True:project=None
+        number=body.get('position',1)
+        if isinstance(number,bool) or not isinstance(number,int) or not 1<=number<=20:
+            raise ValueError('Position number must be an integer from 1 to 20')
+        identity=position_id(body.get('position_id') or f'p{number-1}')
+        plan=project.metadata.get('spatial_plan') if project is not None else None
+        if plan is not None and identity not in {p['id'] for p in plan['positions']}:
+            raise ValueError('Add this microphone position to the explicit measurement plan before capturing it')
+        if channels is None:channels=body.get('channels')
+        if channels is None:channels=plan['expected_channels'] if plan else project.channels if project is not None else None
+        if channels is None and self.receiver and self.receiver.get('connected'):
+            from .native_measure import select_capture_outputs
+            channels=[ALIASES.get(c,c) for c in select_capture_outputs(self.receiver['status'],self.receiver.get('capture_channels'))]
+        if plan is not None and channels is not None and set(channels)-set(plan['expected_channels']):
+            raise ValueError('Capture outputs must belong to the explicit physical-output measurement plan')
+        result=capture_batches(project,identity,channels,body.get('repeats',1),body.get('mode','append'))
+        result['position_number']=number
+        import hashlib
+        result.pop('preview_sha256')
+        result['preview_sha256']=hashlib.sha256(json.dumps(result,sort_keys=True,allow_nan=False).encode()).hexdigest()
+        return result
 
     def start_design(self, settings):
         if not self.project:
@@ -329,23 +370,37 @@ class Workbench:
             raise ValueError('Connect the receiver on the Project and devices page first')
         if body.get("ready") is not True:
             raise ValueError('Confirm that the stock microphone is connected to the AVR and that calibration test tones may play')
-        position, repeats = int(body.get("position", 1)), int(body.get("repeats", 1))
+        position, repeats = body.get("position", 1), body.get("repeats", 1)
         from .native_measure import select_capture_outputs
-        selected_outputs=select_capture_outputs(self.receiver["status"],body.get("channels"))
+        selected_outputs=select_capture_outputs(self.receiver["status"],body.get("channels") if body.get('channels') is not None else self.receiver.get('capture_channels'))
         selected_channels=[ALIASES.get(name,name) for name in selected_outputs]
         position_note=str(body.get('position_note','')).strip()
         if len(position_note)>200:raise ValueError('Keep the microphone position note within 200 characters')
-        if not 1 <= position <= 20 or not 1 <= repeats <= 5:
+        if isinstance(position,bool) or not isinstance(position,int) or isinstance(repeats,bool) or not isinstance(repeats,int) or not 1 <= position <= 20 or not 1 <= repeats <= 5:
             raise ValueError('Position must be 1-20 and repeats must be 1-5')
         with self.lock:
             if self.job["status"] == "running":
                 raise ValueError('Wait for or stop the current job first')
             host = self.receiver["host"]
             existing = self.project if self.project and self.project.origin == "native_avr" and self.project.metadata.get("receiver_host") == host and not body.get("new_project") else None
-            if (len(existing.measurements) if existing else 0)+len(selected_channels)*repeats>1024:
-                raise ValueError('This capture would exceed the 1024-response project limit. Save the current project and start another before playing test tones.')
+            if existing is not None and not isinstance(existing.metadata.get('capture_runs',[]),list):
+                raise ValueError('The saved capture-run history needs review before new acquisition')
+            request=self.preview_native_measurement(body,existing=existing,use_current=False,channels=selected_channels)
+            if body.get('preview_sha256') is not None and body['preview_sha256']!=request['preview_sha256']:
+                raise ValueError('The capture preview changed; review its missing outputs/repeats again before starting')
+            if not request['responses_to_capture']:
+                raise ValueError('This position already meets the requested repeat coverage; no test tones were requested')
+            identity=request['position']
+            run_id=secrets.token_hex(12)
+            run_record={'schema':'audioseyx-capture-run-1','id':run_id,'position':identity,'started_ns':time.time_ns(),
+                        'request':copy.deepcopy(request),'status':'running','responses_saved':0,'receiver_filters_written':False}
+            capture_directory=self.home/'captures';capture_directory.mkdir(exist_ok=True)
+            checkpoint_path=capture_directory/(run_id+'.awb')
+            receipt_path=capture_directory/(run_id+'.json')
+            # Commit the intended scope before any receiver refresh or test tone.
+            receipt_path.write_text(json.dumps(run_record,allow_nan=False),encoding='utf-8')
             self.capture_cancel = threading.Event()
-            self.job = {"status": "running", "kind": "native_measure", "progress": 0, "message": 'Checking receiver and stock microphone'}
+            self.job = {"status": "running", "kind": "native_measure", "capture_run_id":run_id,"progress": 0, "message": 'Checking receiver and stock microphone'}
         def progress(number, message):
             self.job.update({"progress": number, "message": message})
         def run():
@@ -358,31 +413,58 @@ class Workbench:
                     raise ValueError('Could not refresh the receiver status')
                 def checkpoint(measurement):
                     if position_note:measurement.metadata['position_note']=position_note
+                    measurement.metadata.update(capture_run_id=run_id,capture_position_number=position,
+                        capture_preview_sha256=request['preview_sha256'],capture_mode=request['mode'],
+                        capture_session_id=run_id+':'+str(batch_index),capture_batch_expected_channels=list(batch['channels']))
+                    measurement.position=identity
                     rows.append(measurement)
+                    run_record['responses_saved']=len(rows)
                     snapshot = Project('Stock microphone capture checkpoint', rows.copy(), "native_avr",
-                                       metadata={"receiver_host": host, "partial": True})
-                    save_project(snapshot, self.home / f"native-position-{position}-checkpoint.json")
-                capture_position(fresh, position, repeats, self.capture_cancel, progress, checkpoint,channels=selected_channels)
+                                       metadata={"receiver_host": host, "partial": True,'capture_run':run_record})
+                    save_archive(snapshot, checkpoint_path)
+                completed=0
+                for batch_index,batch in enumerate(request['batches']):
+                    if self.capture_cancel.is_set():raise InterruptedError('Capture cancelled before the next response batch')
+                    size=len(batch['channels'])*batch['repeats']
+                    def batch_progress(number,message):
+                        progress(round((completed+number/100*size)/request['responses_to_capture']*95),message)
+                    capture_position(fresh,position,batch['repeats'],self.capture_cancel,batch_progress,checkpoint,channels=batch['channels'])
+                    completed+=size
             except Exception as error:
                 failure = str(error)
             if rows:
-                project = existing or Project('AVR stock microphone measurements', [], "native_avr",
+                project = Project(existing.name,list(existing.measurements),existing.origin,existing.model,existing.tier,
+                                  copy.deepcopy(existing.metadata),list(existing.warnings),id=existing.id) if existing else Project('AVR stock microphone measurements', [], "native_avr",
                                               value(fresh["info"], "Model", "ModelName", "targetModelName"),
                                               identify_tier(value(fresh["info"], "EqType", "enMultEQType")),
                                               {"receiver_host": host, "receiver_snapshot": fresh},
                                               ['The receiver sampled these responses and transferred them over the LAN. Original responses are retained without peak alignment.',
                                                'Model-specific microphone calibration and timing still need hardware validation. Mixed phase is not enabled automatically.'])
                 project.measurements.extend(rows)
-                if position_note:project.metadata.setdefault('position_notes',{})[f'p{position-1}']=position_note
+                if position_note:project.metadata.setdefault('position_notes',{})[identity]=position_note
                 project.metadata["partial"] = failure is not None
-                with self.lock:
-                    self.job = {"status": "failed" if failure else "complete", "kind": "native_measure", "progress": 0 if failure else 100,
-                                "message": ('Saved partial responses: ' + failure) if failure else f"Position {position} complete; saved {len(rows)} raw responses"}
-                    self.set_project(project)
-                self.log('Stock microphone data saved. End calibration mode and unplug the microphone before transfer.')
+                run_record.update(status='cancelled' if self.capture_cancel.is_set() else 'partial' if failure else 'complete',
+                                  finished_ns=time.time_ns(),responses_saved=len(rows),error=failure)
+                project.metadata.setdefault('capture_runs',[]).append(copy.deepcopy(run_record))
+                try:
+                    with self.lock:
+                        self.set_project(project,_capture_run_id=run_id)
+                    final_job = {"status": "failed" if failure else "complete", "kind": "native_measure", "progress": 0 if failure else 100,
+                                 "message": ('Saved partial responses: ' + failure) if failure else f"Capture at {identity} completed; saved {len(rows)} raw responses"}
+                    self.log('Stock microphone data saved. End calibration mode and unplug the microphone before transfer.')
+                except (OSError,ValueError,TypeError) as error:
+                    run_record.update(status='save_failed',error=str(error))
+                    final_job={'status':'failed','kind':'native_measure','progress':0,'message':'Project save failed; the per-run checkpoint is retained: '+str(error)}
             else:
-                self.job = {"status": "failed", "kind": "native_measure", "progress": 0, "message": failure or 'No valid measurement was received'}
-                self.log('Stock microphone capture incomplete: ' + self.job["message"])
+                run_record.update(status='cancelled' if self.capture_cancel.is_set() else 'failed',finished_ns=time.time_ns(),responses_saved=0,error=failure)
+                final_job = {"status": "failed", "kind": "native_measure", "progress": 0, "message": failure or 'No valid measurement was received'}
+                self.log('Stock microphone capture incomplete: ' + final_job["message"])
+            try:
+                temporary=receipt_path.with_suffix('.tmp')
+                temporary.write_text(json.dumps(run_record,allow_nan=False),encoding='utf-8')
+                temporary.replace(receipt_path)
+            except (OSError,ValueError,TypeError):self.log('Capture status could not be committed; retained response checkpoints were not removed.')
+            with self.lock:self.job=final_job
         threading.Thread(target=run, daemon=True).start()
         return self.job
 

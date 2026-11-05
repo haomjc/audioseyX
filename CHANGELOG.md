@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0a12 — explicit spatial plans and resumable position capture
+
+- Separate planned locations, seat priorities, response repeats and capture runs. Replace the fixed seven-point workflow with an editable position/seat/role/output matrix; retain arbitrary imported position IDs.
+- Preview actual missing output/repeat batches offline, bind capture scope to the dataset, and stop completed or stale requests before receiver refresh. Keep per-run raw checkpoints and receipts; interrupted attempts can resume only missing outputs.
+- Enforce explicit plan completeness before normal design and final transfer. Carry excluded-point roles and seat-balanced validation weights through independent, coupled native and complex reference paths without refitting held-out targets.
+- Preserve legacy dataset fingerprints when no explicit spatial plan exists. Keep raw records and the prior source project immutable during failed/partial capture replacement. No historical TV-guided eight-point recovery is claimed.
+
 ## 0.5.0a11 — portable saved-run validation
 
 - Compare resolved archive paths in recovery tests so macOS temporary-directory aliases identify the same verified file. Runtime archive containment and integrity checks remain enforced.

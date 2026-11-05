@@ -452,7 +452,7 @@ def evaluate_shared_curve_controls(project, design, primary, *, cancel=None):
             held=Project(project.name,[m for m in project.measurements if m.position in validation],
                          project.origin,project.model,project.tier,dict(project.metadata))
             held_grid=SpectralGrid(held,design,memory_mib=float(settings.get('receiver_memory_mib',512)),cancel=cancel)
-            held_settings={**internal,'position_weights':{},'receiver_analysis_low_hz':band[0],'receiver_analysis_high_hz':band[1]}
+            held_settings={**internal,'position_weights':settings.get('validation_position_weights',{}),'receiver_analysis_low_hz':band[0],'receiver_analysis_high_hz':band[1]}
             value=direct_power_evaluation({'Reference':held_grid},snapshot,{'Reference':held_settings},groups,
                                            proposal,position_weights(held,held_settings),{'Reference':1.},choices,cancel)
             held_evaluation={'positions':sorted(validation),'used_for_design':False,'references_from_training':True,
@@ -471,7 +471,7 @@ def evaluate_shared_curve_controls(project, design, primary, *, cancel=None):
         held = Project(project.name, [m for m in project.measurements if m.position in validation],
                        project.origin, project.model, project.tier, dict(project.metadata))
         held_grid = SpectralGrid(held, design, memory_mib=float(settings.get('receiver_memory_mib', 512)), cancel=cancel)
-        held_settings = {**internal, 'position_weights':{}, 'receiver_analysis_low_hz':band[0], 'receiver_analysis_high_hz':band[1]}
+        held_settings = {**internal, 'position_weights':settings.get('validation_position_weights',{}), 'receiver_analysis_low_hz':band[0], 'receiver_analysis_high_hz':band[1]}
         held_weights = position_weights(held, held_settings)
         table = builder(held_grid, snapshot, held_settings, groups, proposal['levels_db'], held_weights, selected)
         held_evaluation = {'positions':sorted(validation), 'used_for_design':False,
@@ -588,7 +588,7 @@ def calibrate_receiver(project, design, settings, *, progress=None, cancel=None)
         held = Project(project.name, [m for m in project.measurements if m.position in validation],
                        project.origin, project.model, project.tier, dict(project.metadata))
         held_grid = SpectralGrid(held, design, memory_mib=float(settings.get('receiver_memory_mib', 512)), cancel=cancel)
-        held_settings = {**internal, 'position_weights': {}, 'receiver_analysis_low_hz': band[0], 'receiver_analysis_high_hz': band[1]}
+        held_settings = {**internal, 'position_weights': settings.get('validation_position_weights',{}), 'receiver_analysis_low_hz': band[0], 'receiver_analysis_high_hz': band[1]}
         held_weights = position_weights(held, held_settings)
         after_choices = {g['id']: [result['crossovers_hz'][g['id']]] for g in groups}
         original_held_settings = {**held_settings, '_receiver_base_distances_m': snapshot['distances_m']}

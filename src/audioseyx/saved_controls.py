@@ -35,6 +35,7 @@ def project_signature(project):
     header={'model':project.model,'tier':project.tier,'groups':project.metadata.get('same_model_groups'),
             'listening_area':project.metadata.get('listening_area'),
             'snapshot':snapshot_fingerprint(project.metadata.get('receiver_settings_snapshot',{}))}
+    if project.metadata.get('spatial_plan') is not None:header['spatial_plan']=project.metadata['spatial_plan']
     digest.update(json.dumps(header,sort_keys=True,allow_nan=False).encode())
     for m in project.measurements:
         digest.update(json.dumps([m.channel,m.position,m.sample_rate,m.start_time_s,m.timing_reference],allow_nan=False).encode())

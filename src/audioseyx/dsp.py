@@ -184,7 +184,7 @@ def design_channel(measurements, tier, channel, settings):
                       "target": np.interp(grid, frequencies, robust * (1 - weights) + target * weights).tolist()}}
 
 
-def evaluate_channel_filter(measurements,item,settings):
+def evaluate_channel_filter(measurements,item,settings,*,position_priorities=None):
     if not measurements:return {'channel':item['channel'],'available':False,'reason':'No validation response for this output'}
     fs=item['sample_rate'];nfft=next_fast_len(max(65536,len(item['taps'])*4))
     f=np.fft.rfftfreq(nfft,1/fs)
@@ -200,13 +200,17 @@ def evaluate_channel_filter(measurements,item,settings):
                       float(settings.get('bass_db',3))/(1+(frequencies/100)**4)+float(settings.get('tilt_db_oct',-.5))*np.log2(np.maximum(frequencies,1000)/1000))
     gain=20*np.log10(np.maximum(abs(rfft(item['taps'],nfft)[selected]),1e-15))
     positions=sorted({m.position for m in measurements});weights=np.zeros(len(measurements))
-    for position in positions:
+    masses=np.array([float(position_priorities.get(p,1)) if position_priorities is not None else 1. for p in positions])
+    if not np.isfinite(masses).all() or np.any(masses<=0):raise ValueError('Validation position priorities must be positive and finite')
+    masses/=masses.max();masses/=masses.sum()
+    for position,mass in zip(positions,masses):
         indices=[i for i,m in enumerate(measurements) if m.position==position]
-        weights[indices]=1/(len(positions)*len(indices))
+        weights[indices]=mass/len(indices)
     return {'channel':item['channel'],'available':True,'measurements':len(measurements),'positions':positions,
             'rms_before_db':float(np.sqrt(np.mean(weights@((response-target)**2)))),
             'rms_after_db':float(np.sqrt(np.mean(weights@((response+gain-target)**2)))),
-            'reference_level_from_training_db':reference,'used_for_design':False,'renormalized_after_design':False}
+            'reference_level_from_training_db':reference,'used_for_design':False,'renormalized_after_design':False,
+            'position_weights':dict(zip(positions,masses.tolist()))}
 
 
 def design_project(project, tier, settings, progress=None, *, cancel=None):
@@ -216,7 +220,8 @@ def design_project(project, tier, settings, progress=None, *, cancel=None):
     if settings.get('curve_profiles') is not None:
         from .calibration_curves import design_calibration_curves
         return design_calibration_curves(project, tier, settings, progress, cancel=cancel)
-    settings=dict(settings)
+    from .spatial_plan import prepare_design
+    settings=prepare_design(project,settings)
     validation=settings.get('validation_positions',[])
     if isinstance(validation,str):validation=[p.strip() for p in validation.split(',') if p.strip()]
     all_positions={m.position for m in project.measurements}
@@ -277,7 +282,8 @@ def design_project(project, tier, settings, progress=None, *, cancel=None):
     result.update(training_positions=sorted(all_positions-set(validation)),validation_positions=validation)
     if validation:
         result['independent_validation']={'positions':validation,'used_for_design':False,
-            'channels':[evaluate_channel_filter([m for m in project.measurements if m.channel==item['channel'] and m.position in validation],item,settings) for item in output]}
+            'channels':[evaluate_channel_filter([m for m in project.measurements if m.channel==item['channel'] and m.position in validation],item,settings,
+                        position_priorities=settings.get('validation_position_weights')) for item in output]}
     if optimizer == 'native_calibration':
         if engine=='coupled':
             from .native_refinement import refine_native_curves

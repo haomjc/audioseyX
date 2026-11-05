@@ -108,8 +108,13 @@ class Project:
         area=self.metadata.get('listening_area');coverage=None
         if area:
             from .listening_area import resolve_listening_area
-            try:coverage=resolve_listening_area(self,area)
+            spatial=self.metadata.get('spatial_plan') or {}
+            held=[p['id'] for p in spatial.get('positions',[]) if isinstance(p,dict) and p.get('role')=='validation'] if isinstance(spatial,dict) else []
+            try:coverage=resolve_listening_area(self,area,held)
             except ValueError as error:coverage={'required_seats_measured':False,'error':str(error)}
+        from .spatial_plan import inventory
+        try:spatial_inventory=inventory(self)
+        except (ValueError,TypeError):spatial_inventory={'complete':False,'error':'The saved spatial plan needs review'}
         return {"id": self.id, "name": self.name, "origin": self.origin, "model": self.model,
                 "tier": self.tier, "channels": self.channels,
                 "positions": sorted({m.position for m in self.measurements}),
@@ -119,6 +124,8 @@ class Project:
                 "same_model_groups":self.metadata.get("same_model_groups",[]),
                 "position_notes":self.metadata.get('position_notes',{}),
                 "listening_area_plan":area,"listening_area_coverage":coverage,
+                'spatial_plan':self.metadata.get('spatial_plan'),'spatial_inventory':spatial_inventory,
+                'capture_runs':self.metadata.get('capture_runs',[]),
                 "unsafe_capture_indices":unsafe,
                 "warnings": self.warnings+(['Unverified SWMIX sweep addressing is present. Preserve these records but exclude or remeasure them before filter design.'] if unsafe else []),
                 "measurements": [m.summary() for m in self.measurements]}

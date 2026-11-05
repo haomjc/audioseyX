@@ -225,9 +225,9 @@ def calibrate_joint_curves(project, curves, settings, *, headroom_curves=None, p
         held=Project(project.name,[m for m in project.measurements if m.position in validation],
                      project.origin,project.model,project.tier,dict(project.metadata))
         held_grids=_curve_grids(held,curves,budget,cancel)
-        held_settings={name:{**s,'position_weights':{},'receiver_analysis_low_hz':band[0],
+        held_settings={name:{**s,'position_weights':s.get('validation_position_weights',{}),'receiver_analysis_low_hz':band[0],
                              'receiver_analysis_high_hz':band[1]} for name,s in internal.items()}
-        held_positions=position_weights(held,{})
+        held_positions=position_weights(held,held_settings['Flat'])
         original_held={name:{**s,'_receiver_base_distances_m':snapshot['distances_m']} for name,s in held_settings.items()}
         table=build_curve_table(held_grids,snapshot,original_held,groups,snapshot['levels_db'],held_positions,weights,
                                 selected=baseline_choices,budget=budget,cancel=cancel,delays=[0.])
@@ -242,7 +242,7 @@ def calibrate_joint_curves(project, curves, settings, *, headroom_curves=None, p
         held_gap=abs(held_direct['objective']-after['objective'])
         if held_gap>1e-8*max(1.,abs(held_direct['objective']),abs(after['objective'])):
             raise ValueError('Held-out complete-response evaluation disagrees with the power moments')
-        validation_evaluation={'positions':sorted(validation),'used_for_design':False,'references_from_training':True,
+        validation_evaluation={'positions':sorted(validation),'position_weights':held_positions,'used_for_design':False,'references_from_training':True,
                                'renormalized_after_design':False,'before':before,'after':after,'direct_after':held_direct,
                                'power_moment_absolute_gap':float(held_gap)}
     search['baseline_scope']='shared_main_ERB_levels_and_selected_distance_basis; selected_fixed_FIRs; original_crossovers_and_zero_extra_sub_delay_or_sub_level_change'

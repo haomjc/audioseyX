@@ -64,7 +64,7 @@ def curve_designs(design):
         raise ValueError('Both complete calibration curves require the same distinct output set')
     if reference.get('training_positions') != design.get('training_positions') or reference.get('validation_positions') != design.get('validation_positions'):
         raise ValueError('Both calibration curves must retain identical training and validation positions')
-    for key in ['listening_area', 'position_weights', 'validation_positions', 'receiver_measurement_context',
+    for key in ['listening_area', 'position_weights', 'validation_positions', 'spatial_plan', 'validation_position_weights', 'receiver_measurement_context',
                 'timing_confirmed', 'relative_levels_confirmed', 'routing_measurements_confirmed']:
         if reference.get('settings', {}).get(key) != design.get('settings', {}).get(key):
             raise ValueError('Calibration curves cannot use different spatial or timing references')

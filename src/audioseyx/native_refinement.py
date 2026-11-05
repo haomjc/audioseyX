@@ -136,7 +136,7 @@ def _refresh_reports(project, curves, settings, cancel=None):
             design['independent_validation'] = dict(positions=sorted(held), used_for_design=False,
                 stage='refined_EQ_FIR_before_receiver_controls', channels=[evaluate_channel_filter(
                     [m for m in project.measurements if m.channel == item['channel'] and m.position in held],
-                    item, design['settings']) for item in design['channels']])
+                    item, design['settings'],position_priorities=design['settings'].get('validation_position_weights')) for item in design['channels']])
         if settings.get('temporal_diagnostics', False):
             from .temporal import predict_filter_temporal
             design['temporal_prediction'] = predict_filter_temporal(project, design,

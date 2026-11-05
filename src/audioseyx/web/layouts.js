@@ -32,9 +32,11 @@ function renderReceiverLayout(receiver){
 
 let areaProject='';
 function renderListeningArea(project){
+ renderSpatialPlanner(project);
  const plan=project?.listening_area_plan,coverage=project?.listening_area_coverage;
- if(project&&project.id!==areaProject){$('use-listening-area').checked=!!plan;$('allow-partial-area').checked=false;areaProject=project.id;}
- $('area-coverage').textContent=coverage?((coverage.missing_training_seats?.length?'Missing measured seats: '+coverage.missing_training_seats.join(', '):'Every requested seat has measured data')+' · '+(coverage.seats||[]).map(s=>s.seat+' '+Math.round(s.requested_priority*100)+'% ('+s.training_positions.length+' points)').join(' / ')):'No saved seat-priority plan. Correction uses the imported positions.';
+ const source=project?project.id+'/'+JSON.stringify(plan):'';
+ if(project&&source!==areaProject){$('use-listening-area').checked=!!plan;$('allow-partial-area').checked=false;areaProject=source;}
+ $('area-coverage').textContent=coverage?.error?'Listening-area plan needs review: '+coverage.error:coverage?((coverage.missing_training_seats?.length?'Missing measured seats: '+coverage.missing_training_seats.join(', '):'Every requested seat has measured data')+' · '+(coverage.seats||[]).map(s=>s.seat+' '+Math.round(s.requested_priority*100)+'% ('+s.training_positions.length+' points)').join(' / ')):'No saved seat-priority plan. Correction uses the imported positions.';
 }
 function listeningAreaSettings(){
  const settings={spatial_statistics:'position_balanced'};
@@ -46,3 +48,4 @@ function listeningAreaSettings(){
  return settings;
 }
 $('save-row-plan').onclick=()=>action(async()=>{await api('/api/listening-area',{preset:'three_seat_row',centre_priority:Number($('centre-priority').value)/100});await refresh();toast('Seat priorities saved. Missing seat measurements remain unavailable.');});
+initSpatialPlanner();

@@ -157,6 +157,8 @@ def build_server(bench_factory, home, port=0, open_browser=True):
                 return send_file(target,mimetype='application/zip',as_attachment=True,download_name='audioseyX-saved-design.zip')
             if path == '/native-refinement.js':
                 return Response((assets/'native-refinement.js').read_bytes(),content_type='text/javascript; charset=utf-8')
+            if path == '/spatial-plan.js':
+                return Response((assets/'spatial-plan.js').read_bytes(),content_type='text/javascript; charset=utf-8')
             if path == "/api/layouts":
                 from .layouts import presets
                 from .model import CHANNELS
@@ -209,6 +211,16 @@ def build_server(bench_factory, home, port=0, open_browser=True):
             result = bench.rew.measure(body["command"], body.get("parameters", {}))
         elif path == "/api/native-measure/start":
             result = bench.start_native_measurement(body)
+        elif path == '/api/native-measure/preview':
+            result=bench.preview_native_measurement(body)
+        elif path == '/api/spatial-plan':
+            result=bench.set_spatial_plan(body)
+        elif path == '/api/spatial-plan/preview':
+            from .spatial_plan import preset_plan,checked_plan,inventory
+            if bench.project is None:raise ValueError('Import measurements before planning positions')
+            plan=checked_plan(body['plan'],bench.project) if body.get('plan') is not None else preset_plan(
+                bench.project,body.get('preset','three_seat'),body.get('count',8),float(body.get('centre_priority',.5)),body.get('repeats',1))
+            result={'plan':plan,'inventory':inventory(bench.project,plan),'saved':False,'no_hardware_contact':True}
         elif path == "/api/native-measure/cancel":
             bench.capture_cancel.set()
             result = {"cancel_requested": True}
@@ -279,10 +291,18 @@ def build_server(bench_factory, home, port=0, open_browser=True):
             if body.get('preset')!='three_seat_row':raise ValueError('Select a supported listening-area preset')
             priority=float(body.get('centre_priority',.5))
             if not .01<=priority<=.98:raise ValueError('Centre-seat priority must be 1-98 percent')
-            plan=three_seat_row_plan()
-            for seat in plan['seats']:seat['weight']=priority if seat['id']=='centre' else (1-priority)/2
-            bench.project.metadata['listening_area']=plan
-            result=bench.set_project(bench.project)
+            if bench.project.metadata.get('spatial_plan') is not None:
+                import copy
+                plan=copy.deepcopy(bench.project.metadata['spatial_plan'])
+                if {s['id'] for s in plan['seats']}!={'centre','left','right'}:
+                    raise ValueError('Edit priorities in the custom spatial plan for this seat layout')
+                for seat in plan['seats']:seat['weight']=priority if seat['id']=='centre' else (1-priority)/2
+                result=bench.set_spatial_plan({'plan':plan})
+            else:
+                plan=three_seat_row_plan()
+                for seat in plan['seats']:seat['weight']=priority if seat['id']=='centre' else (1-priority)/2
+                bench.project.metadata['listening_area']=plan
+                result=bench.set_project(bench.project)
         elif path == "/api/room-modes":
             from .analysis import room_modes
             result = room_modes(body["length"], body["width"], body["height"], body.get("high_hz", 200))

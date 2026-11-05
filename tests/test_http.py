@@ -19,6 +19,27 @@ from audioseyx.model import Measurement, Project
 
 
 class HttpWorkflowTests(unittest.TestCase):
+    def test_spatial_plan_preview_save_and_resume_preview_are_offline(self):
+        from test_spatial_plan import fixture
+        self.bench.set_project(fixture(1,repeats=2));self.bench.receiver=None
+        with patch('audioseyx.app.ReceiverClient',side_effect=AssertionError('Offline planning cannot access a receiver')):
+            with self.request('/api/spatial-plan/preview',{'preset':'three_seat','count':8},self.bench.token) as response:
+                preview=json.load(response)
+            self.assertFalse(preview['saved']);self.assertIsNone(self.bench.project.metadata.get('spatial_plan'))
+            self.assertEqual(preview['inventory']['measured_positions'],1)
+            with self.request('/api/spatial-plan',{'plan':preview['plan']},self.bench.token) as response:
+                saved=json.load(response)
+            self.assertEqual(saved['spatial_inventory']['planned_positions'],8)
+            with self.request('/api/native-measure/preview',{'position':8,'mode':'resume','repeats':2},self.bench.token) as response:
+                scope=json.load(response)
+            self.assertEqual(scope['responses_to_capture'],6);self.assertTrue(scope['no_hardware_contact'])
+            with self.request('/api/listening-area',{'preset':'three_seat_row','centre_priority':.6},self.bench.token) as response:
+                updated=json.load(response)
+            self.assertEqual(len(updated['spatial_plan']['positions']),8)
+            self.assertAlmostEqual(updated['spatial_plan']['seats'][0]['weight'],.6)
+            self.assertIsNone(self.bench.receiver)
+        with self.request('/spatial-plan.js') as response:self.assertIn(b'initSpatialPlanner',response.read())
+
     def test_saved_run_download_and_recipe_are_local_integrity_checked_operations(self):
         from test_saved_controls import project
         from audioseyx.dsp import design_project

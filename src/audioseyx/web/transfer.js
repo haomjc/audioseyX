@@ -48,7 +48,9 @@ function renderTransfer(result){
  const quantization=plan.coefficient_quantization;
  const rates=audit?Object.values(audit.sample_rate_slots_hz).map(hz=>(hz/1000)+' kHz').join(' / '):'';
  const dataCheck=audit?`<div class="summary-line"><span>Native data coverage</span><strong>${audit.channels} outputs / ${audit.streams} complete streams</strong></div><div class="summary-line"><span>Different native curve data</span><strong>${audit.channels_with_distinct_curve_coefficients} / ${audit.channels} outputs</strong></div><p class="hint">Both calibration curves and ${rates} slots were reconstructed and checked before transfer. These byte checks do not verify native filter reconstruction or acoustic performance.</p>`:'<p class="hint">A current native data audit is required before transfer.</p>';
- const precision=quantization?`<details><summary>Coefficient precision</summary><p>Largest absolute coefficient rounding error: ${quantization.maximum_absolute_error.toExponential(3)}. Values rounded to zero: ${quantization.underflowed_values}. This describes coefficient values, not acoustic error.</p></details>`:'';
+ const coverage=plan.spatial_measurement_coverage;
+ const spatial=coverage?`<p>Reviewed measurement coverage: ${coverage.measured_positions} actual microphone locations / ${coverage.planned_positions} planned; ${coverage.records} response records. Validation-only points: ${(plan.spatial_measurement_plan?.positions||[]).filter(p=>p.role==='validation').map(p=>esc(p.id)).join(', ')||'none'}. Original records remain distinct; calibration does not create responses at missing positions.</p>`:'';
+ const precision=spatial+(quantization?`<details><summary>Coefficient precision</summary><p>Largest absolute coefficient rounding error: ${quantization.maximum_absolute_error.toExponential(3)}. Values rounded to zero: ${quantization.underflowed_values}. This describes coefficient values, not acoustic error.</p></details>`:'');
  const proposal=plan.receiver_settings_proposal;
  const robustness=plan.receiver_measurement_robustness;
  const refinement=plan.receiver_eq_refinement;

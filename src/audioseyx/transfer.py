@@ -162,6 +162,12 @@ def prepare_transfer(project, design, template, receiver):
     validate_template(template, allow_settings_only=True)
     if design.get('project_id')!=project.id:
         raise ValueError('The filter design belongs to another measurement project; redesign before preparing transfer')
+    if project.metadata.get('spatial_plan') is not None:
+        from .spatial_plan import inventory,checked_plan
+        if not inventory(project)['complete']:
+            raise ValueError('An incomplete spatial measurement plan cannot be prepared as final calibration')
+        if design.get('settings',{}).get('spatial_plan')!=checked_plan(project.metadata['spatial_plan'],project):
+            raise ValueError('The filter design does not match the current spatial measurement plan')
     area=design.get('settings',{}).get('listening_area_resolution')
     if area and not area.get('required_seats_measured'):
         raise ValueError('A provisional listening-area design with missing measured seats cannot be prepared as final row calibration')
@@ -315,6 +321,8 @@ def prepare_transfer(project, design, template, receiver):
                'receiver_control_selection': copy.deepcopy(design.get('receiver_calibration', {}).get('control_selection')) if receiver_proposal else None,
                'receiver_measurement_robustness': copy.deepcopy(design.get('receiver_calibration', {}).get('measurement_robustness')) if receiver_proposal else None,
                'receiver_eq_refinement': copy.deepcopy(design.get('receiver_calibration', {}).get('eq_refinement')) if receiver_proposal else None,
+               'spatial_measurement_plan':copy.deepcopy(design['settings'].get('spatial_plan')),
+               'spatial_measurement_coverage':copy.deepcopy(design['settings'].get('spatial_coverage')),
                'headroom_compensated_by_channel_levels': bool(not settings_only or receiver_proposal),
                "coefficient_quantization": {
                    "maximum_absolute_error": max(row["maximum_absolute_error"] for row in precision_rows),
