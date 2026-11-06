@@ -1,21 +1,48 @@
 # Publishing and maintenance
 
-## Planned destinations
+## Publication destinations
 
 | Component | Destination | Setup required |
 |---|---|---|
 | Source, issues and tags | [haomjc/audioseyX](https://github.com/haomjc/audioseyX) on GitHub | Public repository exists; CI checks subsequent source updates |
 | Python package | `audioseyX` on PyPI | Existing PyPI account; verify name availability and configure a Trusted Publisher |
-| Main documentation | Read the Docs | Create/connect the account, import the GitHub repository and build `.readthedocs.yaml` |
+| Main documentation | [GitHub Pages](https://haomjc.github.io/audioseyX/) | GitHub Actions builds the English Sphinx site from `main` |
+| Optional versioned documentation | Read the Docs | Import the repository and build `.readthedocs.yaml`; online deployment must be verified separately |
 | Windows executable | GitHub Actions artifact, then a reviewed GitHub Release | Run the Windows workflow against a version tag |
 
-GitHub is public. The PyPI and Read the Docs destinations still require account setup; their local configuration is not a live-publication claim. Package-index names are not reserved by a local configuration or a pending publisher.
+The source and main documentation are public on GitHub. PyPI publishing and the optional Read the Docs deployment require separate service configuration; their local configuration is not a live-publication claim. Package-index names are not reserved by a local configuration or a pending publisher.
 
 ## First GitHub push
 
 The public tree is separate from the local research prototype. Only reviewed source, documentation, public synthetic fixtures and notices belong in the repository. Do not add private compatibility tables, extracted binaries, personal measurement files or credentials.
 
-Create `haomjc/audioseyX`, add the repository as `origin`, and push `main`. The CI workflow checks the public tests, package contents and documentation. Existing cached CLI credentials may need to be refreshed through the normal GitHub login flow.
+The public repository already exists at `haomjc/audioseyX`. Use it as `origin` and push reviewed changes to `main`. The CI workflow checks the public tests, package contents and documentation. Existing cached CLI credentials may need to be refreshed through the normal GitHub login flow.
+
+## GitHub Pages documentation
+
+The main site is **<https://haomjc.github.io/audioseyX/>**. It uses the English Markdown sources in `docs/`, Sphinx and the Furo theme, including navigation, client-side search and light/dark themes. Documentation builds do not import the audio engine or require numerical dependencies or receiver access.
+
+The repository's Pages publishing source is **GitHub Actions**. `.github/workflows/docs.yml`, named **Publish documentation**, runs when documentation, included project guides, the version source or the workflow changes on `main`. It can also be run manually from the Actions tab. Ordinary pull requests are checked by CI and do not deploy the public site.
+
+The build installs `docs/requirements.txt`, treats Sphinx warnings as errors, and checks the generated site's local links, canonical URLs and file tree. It uploads only the HTML output, with `.nojekyll`; build caches and research notes are excluded. The separate deployment job publishes through the `github-pages` environment with short-lived GitHub Actions credentials. No publishing token is stored in the repository.
+
+To preview the documentation locally:
+
+```console
+python -m pip install -r docs/requirements.txt
+python -m sphinx -W --keep-going -b html -d docs/_build/doctrees docs docs/_build/html
+python -m http.server 8000 --directory docs/_build/html
+```
+
+Open `http://localhost:8000/`. For a Pages-equivalent build, set `AUDIOSEYX_DOCS_BASE_URL` to `https://haomjc.github.io/audioseyX/` before building, then run:
+
+```console
+python tools/check_docs_site.py docs/_build/html --base-url https://haomjc.github.io/audioseyX/
+```
+
+In Actions, inspect both **build** and **deploy** for the latest documentation commit. A successful local build alone does not establish that the public site was updated. The current Pages site tracks `main`; release tags remain available in GitHub, but this site does not offer a version selector.
+
+Official instructions: [custom workflows for GitHub Pages](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages).
 
 ## PyPI Trusted Publishing
 
@@ -33,11 +60,11 @@ Official instructions: [new project with a Trusted Publisher](https://docs.pypi.
 
 ## Read the Docs
 
-Read the Docs is the main documentation target. The account owner must complete signup and any terms or authorization prompts, then import `haomjc/audioseyX`.
+Read the Docs remains an optional destination for versioned builds of the same documentation. With an authorized account, import `haomjc/audioseyX` and verify a successful public build before advertising its URL.
 
 The repository includes `.readthedocs.yaml`, `docs/conf.py` and a pinned documentation requirements file. Documentation builds do not import the audio engine or require native numerical resources. The default language is English. The same Markdown sources can later support translations.
 
-Enable the default branch for the development documentation. Activate release tags as versions when ready. Do not advertise a stable documentation version before a stable software release exists. After the site is live, add its real URL to the project metadata and README.
+Enable the default branch for the development documentation. Activate release tags as versions when ready. Do not advertise a stable documentation version before a stable software release exists. After the optional site is live, add its verified URL alongside the main GitHub Pages link.
 
 Official instructions: [add a project](https://docs.readthedocs.com/platform/stable/intro/add-project.html), [configuration](https://docs.readthedocs.com/platform/stable/config-file/v2.html), and [versions](https://docs.readthedocs.com/platform/stable/versions.html).
 

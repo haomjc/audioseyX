@@ -20,7 +20,11 @@ html_theme = "furo"
 html_title = "audioseyX documentation"
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
-html_baseurl = os.environ.get("READTHEDOCS_CANONICAL_URL", "")
+html_baseurl = os.environ.get("AUDIOSEYX_DOCS_BASE_URL") or os.environ.get("READTHEDOCS_CANONICAL_URL", "")
+if html_baseurl:
+    html_baseurl = html_baseurl.rstrip("/") + "/"
+if os.environ.get("AUDIOSEYX_DOCS_BASE_URL"):
+    extensions.append("sphinx.ext.githubpages")
 html_theme_options = {
     "light_css_variables": {"color-brand-primary": "#007f80", "color-brand-content": "#006d70"},
     "dark_css_variables": {"color-brand-primary": "#67cbbb", "color-brand-content": "#80d8ca"},

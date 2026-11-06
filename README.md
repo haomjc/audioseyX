@@ -4,7 +4,7 @@
 
 audioseyX brings measurement files, REW integration, room analysis and Audyssey-aware filter design into one local interface. It preserves individual microphone positions and original response timing, evaluates the actual truncated filters, and keeps numerical predictions separate from hardware and acoustic verification.
 
-**Status: 0.5.0a14, an experimental public preview.** PyPI publishing and the Read the Docs site are being configured; a local build does not establish that either service is live. Read-only information, speaker settings and Float capture transport have been checked on an X3700H. Microphone compensation, normal-playback reconstruction and transfer remain unverified. This project is independent of Audyssey, Denon, Marantz and Dirac.
+**Status: 0.5.0a14, an experimental public preview.** Read the [English documentation](https://haomjc.github.io/audioseyX/). PyPI publishing is still being configured. Read-only information, speaker settings and Float capture transport have been checked on an X3700H. Microphone compensation, normal-playback reconstruction and transfer remain unverified. This project is independent of Audyssey, Denon, Marantz and Dirac.
 
 ## What works offline
 
@@ -82,9 +82,9 @@ The new joint mode is export-only. A feasible improving filter can be returned b
 
 ## Documentation and contribution
 
-The English documentation source is in `docs/`, with Sphinx, MyST Markdown and the Furo theme. `.readthedocs.yaml` is prepared for Read the Docs. GitHub Actions check tests, package contents and documentation; manual workflows prepare PyPI publishing and Windows artifacts.
+The [English documentation website](https://haomjc.github.io/audioseyX/) is hosted on GitHub Pages, with navigation, search and light/dark themes. Its source is in `docs/`, using Sphinx, MyST Markdown and Furo. The **Publish documentation** workflow builds and deploys documentation changes on `main`; `.readthedocs.yaml` can build the same sources on Read the Docs. GitHub Actions also check tests and package contents; manual workflows prepare PyPI publishing and Windows artifacts.
 
-Read [the documentation](docs/index.md), [contribution guide](CONTRIBUTING.md), [release guide](docs/releasing.md), and [third-party notices](THIRD_PARTY_NOTICES.md). Do not attach private calibration files or local credentials to public issues.
+Read [the documentation](https://haomjc.github.io/audioseyX/), [documentation source](docs/index.md), [contribution guide](CONTRIBUTING.md), [release guide](https://haomjc.github.io/audioseyX/releasing.html), and [third-party notices](THIRD_PARTY_NOTICES.md). Do not attach private calibration files or local credentials to public issues.
 
 ## License
 

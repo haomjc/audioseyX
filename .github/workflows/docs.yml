@@ -1,0 +1,65 @@
+name: Publish documentation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'src/audioseyx/__init__.py'
+      - 'CHANGELOG.md'
+      - 'CONTRIBUTING.md'
+      - 'THIRD_PARTY_NOTICES.md'
+      - 'tools/check_docs_site.py'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.1.0
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: docs/requirements.txt
+      - name: Read Pages configuration
+        id: pages
+        uses: actions/configure-pages@v6.0.0
+      - run: python -m pip install -r docs/requirements.txt
+      - name: Build English documentation
+        env:
+          AUDIOSEYX_DOCS_BASE_URL: ${{ steps.pages.outputs.base_url }}/
+        run: python -m sphinx -W --keep-going -b html -d docs/_build/pages-doctrees docs docs/_build/pages
+      - name: Check the published file tree and internal links
+        run: python tools/check_docs_site.py docs/_build/pages --base-url '${{ steps.pages.outputs.base_url }}/'
+      - name: Upload the built site
+        uses: actions/upload-pages-artifact@v5.0.0
+        with:
+          path: docs/_build/pages
+          include-hidden-files: true
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy documentation
+        id: deployment
+        uses: actions/deploy-pages@v5.0.1

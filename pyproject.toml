@@ -39,6 +39,7 @@ windows = ["pyinstaller>=6.16,<7; sys_platform == 'win32'"]
 audioseyx = "audioseyx.app:main"
 
 [project.urls]
+Documentation = "https://haomjc.github.io/audioseyX/"
 Source = "https://github.com/haomjc/audioseyX"
 Issues = "https://github.com/haomjc/audioseyX/issues"
 Changelog = "https://github.com/haomjc/audioseyX/blob/main/CHANGELOG.md"

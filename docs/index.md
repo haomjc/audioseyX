@@ -18,7 +18,7 @@ This is the **0.5.0a14 experimental preview**. X3700H information/settings reads
 - [Filter design](design.md): targets, native budgets, boost protection and predictions.
 - [Native integration](native-integration.md): experimental receiver support and optional local data.
 - [Troubleshooting](troubleshooting.md): connections, units, downloads and diagnostics.
-- [Releasing](releasing.md): GitHub, PyPI, Read the Docs and Windows artifacts.
+- [Releasing](releasing.md): GitHub Pages, PyPI, Read the Docs and Windows artifacts.
 
 ```{toctree}
 :maxdepth: 2
