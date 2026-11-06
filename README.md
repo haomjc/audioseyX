@@ -4,7 +4,7 @@
 
 audioseyX brings measurement files, REW integration, room analysis and Audyssey-aware filter design into one local interface. It preserves individual microphone positions and original response timing, evaluates the actual truncated filters, and keeps numerical predictions separate from hardware and acoustic verification.
 
-**Status: 0.5.0a14, an experimental public preview.** Read the [English documentation](https://haomjc.github.io/audioseyX/). PyPI publishing is still being configured. Read-only information, speaker settings and Float capture transport have been checked on an X3700H. Microphone compensation, normal-playback reconstruction and transfer remain unverified. This project is independent of Audyssey, Denon, Marantz and Dirac.
+**Status: 0.5.0a15, an experimental public preview.** Read the [English documentation](https://haomjc.github.io/audioseyX/). Read-only information, speaker settings and Float capture transport have been checked on an X3700H. Microphone compensation, normal-playback reconstruction and transfer remain unverified. This project is independent of Audyssey, Denon, Marantz and Dirac.
 
 ## What works offline
 
@@ -26,15 +26,22 @@ audioseyX brings measurement files, REW integration, room analysis and Audyssey-
 - Run deterministic numerical benchmarks with a synthetic holdout position excluded from design.
 - Save compressed projects with array checksums and download results with segment retries and a whole-file hash check.
 
-See [EQ feedback and robust measurement design](docs/robust-refinement.md) for monotone EQ/control iterations, positive repeat weights, explicit gain/timing scenarios and saved run recovery. See [coupled native bass planning](docs/coupled-native.md) for weighted-target, sub-gain/timing/crossover and LFE control. See [independent calibration targets](docs/calibration-curves.md) for separate Flat/Reference designs with shared controls and headroom. See [integrated native calibration](docs/integrated-calibration.md) for auditory-band matching, native-menu planning and original-recording clock tools. See the [Dirac-related development checklist](docs/dirac-coverage.md) and [temporal verification](docs/temporal-verification.md) for current evidence and limits.
+See [EQ feedback and robust measurement design](https://haomjc.github.io/audioseyX/robust-refinement.html) for monotone EQ/control iterations, positive repeat weights, explicit gain/timing scenarios and saved run recovery. See [coupled native bass planning](https://haomjc.github.io/audioseyX/coupled-native.html) for weighted-target, sub-gain/timing/crossover and LFE control. See [independent calibration targets](https://haomjc.github.io/audioseyX/calibration-curves.html) for separate Flat/Reference designs with shared controls and headroom. See [integrated native calibration](https://haomjc.github.io/audioseyX/integrated-calibration.html) for auditory-band matching, native-menu planning and original-recording clock tools. See the [Dirac-related development checklist](https://haomjc.github.io/audioseyX/dirac-coverage.html) and [temporal verification](https://haomjc.github.io/audioseyX/temporal-verification.html) for current evidence and limits.
 
-See [microphone-position plans](docs/spatial-plans.md) for explicit seat/point/repeat coverage, eight or more locations, independent validation roles and resumable one-position capture.
+See [microphone-position plans](https://haomjc.github.io/audioseyX/spatial-plans.html) for explicit seat/point/repeat coverage, eight or more locations, independent validation roles and resumable one-position capture.
 
-See [receiver evidence and local input checks](docs/receiver-audit.md) for menu-gated read-only probing and explicitly authorized five-second Windows microphone-level statistics. Neither diagnostic establishes native DSP or microphone calibration.
+See [receiver evidence and local input checks](https://haomjc.github.io/audioseyX/receiver-audit.html) for menu-gated read-only probing and explicitly authorized five-second Windows microphone-level statistics. Neither diagnostic establishes native DSP or microphone calibration.
 
 ## Installation
 
-Requires Python 3.11 or newer. Until an actual PyPI release exists, install this checkout:
+Requires Python 3.11 or newer. Install the prerelease from PyPI:
+
+```console
+python -m pip install --pre audioseyX
+audioseyx
+```
+
+To install a source checkout instead:
 
 ```console
 python -m pip install .
@@ -47,12 +54,6 @@ For development:
 python -m pip install -e ".[dev,docs]"
 python -m unittest discover -s tests -v
 python -m sphinx -W --keep-going -b html docs docs/_build/html
-```
-
-After publication, the prerelease installation command will be:
-
-```console
-python -m pip install --pre audioseyX
 ```
 
 The distribution name is `audioseyX`; the import module and command are `audioseyx`. The interface is served only on `127.0.0.1`. Python installations store user data in the operating system's per-user application-data directory. An explicit location is also supported:
@@ -70,22 +71,22 @@ Experimental stock-microphone capture targets the observed Float receiver protoc
 
 X3700H Float capture transport, including individual subwoofer commands, has now been checked. **Version 0.5.0a1 used configured SWMIX names as measurement commands; affected subwoofer records must be treated as unverified.** Version 0.5.0a2 separates status and measurement identifiers and checks the returned speaker role. Original data can be retained for audit, with the affected subwoofer recordings excluded or reacquired.
 
-**The public source and packages exclude legacy native coefficient tables and channel-address data whose redistribution permission has not been established.** General filter design and WAV export work without them. Native encoding is explicitly marked unavailable, and receiver transfer is not prepared from guessed data. See [native integration](docs/native-integration.md) for optional local-data configuration and current limitations.
+**The public source and packages exclude legacy native coefficient tables and channel-address data whose redistribution permission has not been established.** General filter design and WAV export work without them. Native encoding is explicitly marked unavailable, and receiver transfer is not prepared from guessed data. See [native integration](https://haomjc.github.io/audioseyX/native-integration.html) for optional local-data configuration and current limitations.
 
 The private 0.3 research prototype is separate from this public source tree. Its local compatibility vectors are not evidence of a license to redistribute them and are not included here.
 
 This is not an implementation of Dirac ART's arbitrary cross-channel support matrix. It does not modify receiver firmware or add routing paths to the existing DSP.
 
-See the [OCA replacement status](docs/oca-comparison.md) for implemented components and remaining native-workflow gaps.
+See the [OCA replacement status](https://haomjc.github.io/audioseyX/oca-comparison.html) for implemented components and remaining native-workflow gaps.
 
-The new joint mode is export-only. A feasible improving filter can be returned before numerical convergence, and expanded XT32 taps do not establish writable native realizability. See [joint design](docs/joint-design.md) for the model, full-layout benchmark, supplied native synthesis format and limits. No same-data OCA/GSonic comparison has been established.
+The new joint mode is export-only. A feasible improving filter can be returned before numerical convergence, and expanded XT32 taps do not establish writable native realizability. See [joint design](https://haomjc.github.io/audioseyX/joint-design.html) for the model, full-layout benchmark, supplied native synthesis format and limits. No same-data OCA/GSonic comparison has been established.
 
 ## Documentation and contribution
 
 The [English documentation website](https://haomjc.github.io/audioseyX/) is hosted on GitHub Pages, with navigation, search and light/dark themes. Its source is in `docs/`, using Sphinx, MyST Markdown and Furo. The **Publish documentation** workflow builds and deploys documentation changes on `main`; `.readthedocs.yaml` can build the same sources on Read the Docs. GitHub Actions also check tests and package contents; manual workflows prepare PyPI publishing and Windows artifacts.
 
-Read [the documentation](https://haomjc.github.io/audioseyX/), [documentation source](docs/index.md), [contribution guide](CONTRIBUTING.md), [release guide](https://haomjc.github.io/audioseyX/releasing.html), and [third-party notices](THIRD_PARTY_NOTICES.md). Do not attach private calibration files or local credentials to public issues.
+Read [the documentation](https://haomjc.github.io/audioseyX/), [documentation source](https://github.com/haomjc/audioseyX/tree/main/docs), [contribution guide](https://github.com/haomjc/audioseyX/blob/main/CONTRIBUTING.md), [release guide](https://haomjc.github.io/audioseyX/releasing.html), and [third-party notices](https://github.com/haomjc/audioseyX/blob/main/THIRD_PARTY_NOTICES.md). Do not attach private calibration files or local credentials to public issues.
 
 ## License
 
-New project code is MIT licensed, copyright 2026 haomjc. The adapted data-only Java stream reader and synthetic format fixtures retain their upstream GLWTS license. Dependency licenses remain separate. See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+New project code is MIT licensed, copyright 2026 haomjc. The adapted data-only Java stream reader and synthetic format fixtures retain their upstream GLWTS license. Dependency licenses remain separate. See [LICENSE](https://github.com/haomjc/audioseyX/blob/main/LICENSE) and [THIRD_PARTY_NOTICES.md](https://github.com/haomjc/audioseyX/blob/main/THIRD_PARTY_NOTICES.md).

@@ -5,12 +5,12 @@
 | Component | Destination | Setup required |
 |---|---|---|
 | Source, issues and tags | [haomjc/audioseyX](https://github.com/haomjc/audioseyX) on GitHub | Public repository exists; CI checks subsequent source updates |
-| Python package | `audioseyX` on PyPI | Existing PyPI account; verify name availability and configure a Trusted Publisher |
+| Python package | [audioseyX on PyPI](https://pypi.org/project/audioseyX/) | Publish reviewed version tags through the Trusted Publisher workflow |
 | Main documentation | [GitHub Pages](https://haomjc.github.io/audioseyX/) | GitHub Actions builds the English Sphinx site from `main` |
 | Optional versioned documentation | Read the Docs | Import the repository and build `.readthedocs.yaml`; online deployment must be verified separately |
 | Windows executable | GitHub Actions artifact, then a reviewed GitHub Release | Run the Windows workflow against a version tag |
 
-The source and main documentation are public on GitHub. PyPI publishing and the optional Read the Docs deployment require separate service configuration; their local configuration is not a live-publication claim. Package-index names are not reserved by a local configuration or a pending publisher.
+The source and main documentation are public on GitHub. PyPI publishing and the optional Read the Docs deployment require separate service configuration. Confirm an uploaded version on the package index before announcing a Python release. Package-index names are not reserved by a local configuration or a pending publisher.
 
 ## First GitHub push
 
@@ -52,7 +52,8 @@ Use PyPI's GitHub Actions Trusted Publisher flow. This avoids storing a long-liv
 2. Use project name `audioseyX`, GitHub owner `haomjc`, repository `audioseyX`, workflow `publish.yml` and environment `pypi`.
 3. Configure a separate publisher on TestPyPI with environment `testpypi` if you want a staging upload. TestPyPI is a separate account/service.
 4. Update the version in `src/audioseyx/__init__.py`, update the changelog, commit and create the matching `vVERSION` tag.
-5. Run the **Publish Python package** workflow for that tag. Select the destination explicitly. Tests, version checks, distribution audit and metadata checks precede upload.
+5. Run the **Publish Python package** workflow for that tag. Select the destination explicitly. Tests, version checks, distribution audit, metadata checks and an isolated installed-wheel check precede upload.
+6. Verify the version on PyPI and install it in a clean environment with `python -m pip install --pre audioseyX==VERSION`. Check the installed command and the packaged interface before announcing it.
 
 No publisher has been configured merely by adding workflow files. Only the account owner can complete the account authorization and verify package ownership. Do not paste a password, recovery code or API token into an issue or chat.
 

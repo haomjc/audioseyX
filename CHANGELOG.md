@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0a15 — Python package publication
+
+- Include the GitHub Pages documentation URL in package metadata and use public documentation/source links in the package description.
+- Document PyPI prerelease installation and retain installation from source.
+- Verify the built wheel in an isolated environment before the Trusted Publisher upload. Keep the existing version-tag, test, archive-content and metadata gates.
+- Preserve all acoustic algorithms, hardware capability limits and experimental-preview status.
+
 ## 0.5.0a14 — deterministic local receipt order
 
 - Assign a serialized workspace commit sequence to new design receipts while preserving their observed wall-clock timestamps. Equal or reversed Windows timestamps no longer reorder the latest completed/cancelled/failed results. Legacy receipts remain readable; known sequences and legacy records have deterministic display order.

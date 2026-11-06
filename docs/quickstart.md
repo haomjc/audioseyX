@@ -1,16 +1,21 @@
 # Quick start
 
-## Install this checkout
+## Install the prerelease
 
 Use Python 3.11 or newer in a virtual environment:
 
 ```console
 python -m venv .venv
-python -m pip install .
+```
+
+Activate `.venv` using your shell's normal activation command, then install from PyPI:
+
+```console
+python -m pip install --pre audioseyX
 audioseyx
 ```
 
-Activate `.venv` using your shell's normal activation command before installation. Until an actual PyPI release exists, use a local checkout or a locally built wheel. Once a prerelease is published, `python -m pip install --pre audioseyX` will install it.
+The `--pre` option selects experimental prereleases. To install a downloaded source checkout instead, run `python -m pip install .` from its root directory. A locally built wheel can also be installed by passing its filename to pip.
 
 `audioseyx` opens the local interface in your browser. `python -m audioseyx` is equivalent. No external web server or receiver is needed to explore the demo.
 

@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing version tag, for example v0.4.0a1
+        description: Existing version tag, for example v0.5.0a15
         required: true
         type: string
       target:
@@ -19,6 +19,9 @@ jobs:
     runs-on: ubuntu-latest
     env:
       RELEASE_TAG: ${{ inputs.tag }}
+      PYTHONUTF8: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -32,6 +35,11 @@ jobs:
       - run: python -m build
       - run: python tools/audit_distribution.py dist
       - run: python -m twine check --strict dist/*.whl dist/*.tar.gz
+      - name: Verify an isolated wheel installation
+        run: |
+          python -m venv wheel-smoke
+          wheel-smoke/bin/python -m pip install dist/*.whl
+          wheel-smoke/bin/python tools/smoke_installed.py
       - uses: actions/upload-artifact@v7.0.2
         with:
           name: release-distributions
